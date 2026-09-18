@@ -1,0 +1,21 @@
+import { useState } from "react";
+import { ArrowLeft, ArrowUpRight, Check, MessageCircle, Plus, ShoppingBag } from "lucide-react";
+import { Link, useRoute } from "wouter";
+import { ProductVisual, ProductCard } from "@/components/CatalogUI";
+import { findProduct, formatINR, normalizeApiProducts, productEnquiry, products, whatsappLink } from "@/lib/catalog";
+import { useCart } from "@/components/SiteShell";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+
+export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCart> }) {
+  const [, params] = useRoute("/products/:id");
+  const { data: liveProduct } = trpc.catalog.get.useQuery({ slug: params?.id || "" }, { enabled: Boolean(params?.id) });
+  const product = normalizeApiProducts(liveProduct ? [liveProduct as unknown as Record<string, unknown>] : undefined)[0] || findProduct(params?.id || "");
+  const [added, setAdded] = useState(false);
+  if (!product) return <div className="container py-28"><h1 className="font-display text-4xl text-white">Product not found.</h1><Link href="/products" className="mt-5 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.14em] text-orange-300">Back to catalog <ArrowUpRight size={14} /></Link></div>;
+  const related = products.filter((item) => item.id !== product.id && item.category === product.category).slice(0, 2);
+  const addProduct = () => { cart.add(product); setAdded(true); window.setTimeout(() => setAdded(false), 1800); };
+  return (
+    <div className="container py-12 md:py-20"><Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40 hover:text-orange-300"><ArrowLeft size={14} /> Back to catalog</Link><div className="mt-10 grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start"><ProductVisual product={product} large /><div className="lg:pt-8"><p className="eyebrow text-orange-300">{product.category} / {product.sku}</p><h1 className="mt-4 max-w-xl font-display text-5xl leading-[0.95] tracking-[-0.05em] text-white md:text-7xl">{product.name}</h1><p className="mt-6 max-w-lg text-base leading-7 text-white/55">{product.description}</p><div className="mt-8 flex items-end gap-4 border-y border-white/10 py-6"><p className="font-mono text-3xl font-semibold text-orange-300">{formatINR(product.price)}</p><span className="mb-1 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-300"><span className="size-1.5 rounded-full bg-emerald-300" /> enquire for current availability</span></div><div className="mt-7 flex flex-wrap gap-3"><Button onClick={addProduct} className="h-12 rounded-sm bg-[#ff6417] px-5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-300">{added ? <><Check size={15} /> Added to cart</> : <><Plus size={15} /> Add to cart</>}</Button><a href={whatsappLink(productEnquiry(product))} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center gap-2 rounded-sm border border-white/15 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white hover:border-orange-400 hover:text-orange-300"><MessageCircle size={15} /> Ask on WhatsApp</a></div><p className="mt-4 font-mono text-[9px] uppercase tracking-[0.13em] text-white/30">Order enquiries are confirmed manually via WhatsApp.</p><div className="mt-12"><p className="eyebrow">Specifications</p><div className="mt-4 overflow-hidden rounded-sm border border-white/10">{product.specs.map((spec) => <div key={spec.label} className="grid grid-cols-[0.9fr_1.1fr] border-b border-white/[0.08] px-4 py-3 last:border-0"><span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">{spec.label}</span><span className="text-sm text-white/80">{spec.value}</span></div>)}</div></div></div></div><div className="mt-24 border-t border-white/10 pt-10"><div className="flex items-center justify-between"><div><p className="eyebrow text-orange-300">You may also need</p><h2 className="mt-3 font-display text-3xl text-white">Complete the signal.</h2></div><ShoppingBag className="text-white/20" /></div><div className="mt-8 grid gap-5 sm:grid-cols-2">{related.map((item) => <ProductCard key={item.id} product={item} onAdd={cart.add} />)}</div></div></div>
+  );
+}

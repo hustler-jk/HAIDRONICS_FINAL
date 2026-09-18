@@ -1,33 +1,42 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { ArrowRight, ArrowUpRight, Boxes, CircuitBoard, MessageCircle, MoveUpRight, Sparkles, Wrench } from "lucide-react";
+import { Link } from "wouter";
+import { ProductCard, ProductVisual } from "@/components/CatalogUI";
+import { heroImage, normalizeApiProducts, products, whatsappLink } from "@/lib/catalog";
+import { useCart } from "@/components/SiteShell";
+import { trpc } from "@/lib/trpc";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
-export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
-
+export default function Home({ cart }: { cart: ReturnType<typeof useCart> }) {
+  const { data: catalogRows } = trpc.catalog.list.useQuery();
+  const liveProducts = normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined);
+  const featured = (liveProducts.length ? liveProducts : products).filter((product) => product.featured);
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
+    <>
+      <section className="hero-shell relative overflow-hidden">
+        <div className="hero-image" style={{ backgroundImage: `url(${heroImage})` }} />
+        <div className="hero-scanlines" />
+        <div className="container relative grid min-h-[650px] items-center gap-12 py-20 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
+          <div className="max-w-[660px]">
+            <div className="mb-7 inline-flex items-center gap-2 border border-orange-400/30 bg-black/30 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-orange-300"><span className="pulse-dot" /> cloud catalog / component intelligence</div>
+            <h1 className="max-w-3xl font-display text-[clamp(3.3rem,8vw,7rem)] font-semibold leading-[0.88] tracking-[-0.055em] text-white">Build the next<br /><span className="text-orange-400">working thing.</span></h1>
+            <p className="mt-8 max-w-[510px] text-base leading-7 text-white/65 md:text-lg">Electronics, IoT, robotics, and embedded essentials — organized for the moment an idea becomes a prototype.</p>
+            <div className="mt-9 flex flex-wrap gap-3"><Link href="/products" className="inline-flex items-center gap-3 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-black transition-transform hover:-translate-y-1 active:scale-95">Explore products <ArrowUpRight size={15} /></Link><Link href="/support" className="inline-flex items-center gap-3 rounded-sm border border-white/20 bg-black/20 px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-white hover:border-orange-400/70 hover:text-orange-300">Project support <ArrowRight size={15} /></Link></div>
+            <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 font-mono text-[10px] uppercase tracking-[0.16em] text-white/42"><span className="flex items-center gap-2"><CircuitBoard size={14} className="text-orange-400" /> curated components</span><span className="flex items-center gap-2"><Wrench size={14} className="text-orange-400" /> builder-first support</span></div>
+          </div>
+          <div className="relative hidden h-[390px] lg:block"><div className="hero-orbit hero-orbit-a" /><div className="hero-orbit hero-orbit-b" /><div className="hero-terminal"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3 font-mono text-[9px] uppercase tracking-[0.17em] text-white/40"><span>system / haidronics</span><span className="text-orange-300">online</span></div><div className="p-5 font-mono text-[11px] leading-7 text-white/60"><p><span className="text-orange-300">01</span> / scan project requirements</p><p><span className="text-orange-300">02</span> / map component options</p><p><span className="text-orange-300">03</span> / build a clearer BOM</p><p className="mt-5 text-white"><span className="mr-2 inline-block h-2 w-2 bg-orange-400" /> ready when you are<span className="animate-pulse text-orange-300">_</span></p></div><div className="absolute -bottom-7 -left-7 flex size-28 items-center justify-center rounded-full border border-orange-400/40 bg-[#0a0c0d]/90"><div className="text-center"><Sparkles size={17} className="mx-auto text-orange-300" /><span className="mt-2 block font-mono text-[8px] uppercase leading-3 tracking-[0.14em] text-white/60">from sketch<br />to signal</span></div></div></div></div>
+        </div>
+      </section>
+
+      <section className="border-y border-white/[0.08] bg-[#0c0f11]">
+        <div className="container grid grid-cols-2 divide-x divide-white/[0.08] md:grid-cols-4"><div className="py-6 pr-5"><p className="eyebrow">01 / discover</p><p className="mt-2 font-display text-base text-white">Find a clean starting point</p></div><div className="px-5 py-6"><p className="eyebrow">02 / understand</p><p className="mt-2 font-display text-base text-white">See specs at a glance</p></div><div className="px-5 py-6"><p className="eyebrow">03 / assemble</p><p className="mt-2 font-display text-base text-white">Build your cart</p></div><div className="py-6 pl-5"><p className="eyebrow">04 / enquire</p><p className="mt-2 font-display text-base text-white">Confirm on WhatsApp</p></div></div>
+      </section>
+
+      <section className="container py-24 md:py-32"><div className="flex flex-col justify-between gap-6 md:flex-row md:items-end"><div><p className="eyebrow text-orange-300">Signal / 01</p><h2 className="mt-3 max-w-xl font-display text-4xl leading-tight text-white md:text-5xl">Featured for the<br /><span className="text-white/35">next prototype.</span></h2></div><Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300 hover:text-white">View full catalog <ArrowUpRight size={15} /></Link></div><div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{featured.map((product) => <ProductCard key={product.id} product={product} onAdd={cart.add} />)}</div></section>
+
+      <section className="border-y border-white/[0.08] bg-[#f2eee7] py-20 text-[#111416] md:py-28"><div className="container grid items-end gap-12 md:grid-cols-[0.9fr_1.1fr]"><div><p className="eyebrow text-[#ec5c19]">Why HAIDRONICS</p><h2 className="mt-4 max-w-md font-display text-4xl leading-[0.97] tracking-[-0.04em] md:text-6xl">Less hunting.<br /><span className="text-black/30">More making.</span></h2></div><div className="grid gap-0 border-t border-black/15 sm:grid-cols-2"><div className="border-b border-black/15 py-5 sm:pr-6"><p className="font-display text-xl">01 <span className="ml-3 text-black/35">Clear specs</span></p><p className="mt-2 text-sm leading-6 text-black/55">The details you need to make a confident next move.</p></div><div className="border-b border-black/15 py-5 sm:pl-6"><p className="font-display text-xl">02 <span className="ml-3 text-black/35">Builder-first</span></p><p className="mt-2 text-sm leading-6 text-black/55">A focused catalog for students, hobbyists, and small teams.</p></div><div className="py-5 sm:pr-6"><p className="font-display text-xl">03 <span className="ml-3 text-black/35">Human support</span></p><p className="mt-2 text-sm leading-6 text-black/55">Ask about a part, a project, or a better way to wire it up.</p></div><div className="py-5 sm:pl-6"><p className="font-display text-xl">04 <span className="ml-3 text-black/35">Flexible ordering</span></p><p className="mt-2 text-sm leading-6 text-black/55">Build an order enquiry and confirm the final details directly.</p></div></div></div></section>
+
+      <section className="container py-24 md:py-32"><div className="relative overflow-hidden rounded-sm border border-orange-400/25 bg-[#14110e] p-8 md:p-14"><div className="absolute -right-20 -top-28 size-80 rounded-full border border-orange-400/20" /><div className="absolute -right-4 -top-12 size-52 rounded-full border border-orange-400/10" /><div className="relative max-w-2xl"><p className="eyebrow text-orange-300">Project support / open channel</p><h2 className="mt-4 font-display text-4xl leading-tight text-white md:text-6xl">Have the idea.<br /><span className="text-orange-400">Need the parts?</span></h2><p className="mt-5 max-w-lg text-base leading-7 text-white/55">Tell us what you’re building and which signals you’re chasing. We’ll help you turn a rough list into a more useful parts conversation.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/support" className="inline-flex items-center gap-3 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-black">Start a project brief <ArrowUpRight size={15} /></Link><a href={whatsappLink("Hi HAIDRONICS, I would like project support.")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 rounded-sm border border-white/15 px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-white/75 hover:border-orange-400 hover:text-orange-300"><MessageCircle size={15} /> Chat directly</a></div></div></div></section>
+
+      <section className="border-t border-white/[0.08] bg-[#0c0f11] py-10"><div className="container flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center"><div className="flex items-center gap-3 text-white/55"><Boxes size={20} className="text-orange-300" /><span className="font-mono text-[10px] uppercase tracking-[0.18em]">New to embedded?</span></div><Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300 hover:text-white">Start with the essentials <MoveUpRight size={14} /></Link></div></section>
+    </>
   );
 }

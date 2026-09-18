@@ -1,0 +1,25 @@
+import { useMemo, useState } from "react";
+import { ArrowUpRight, Filter, Search, SlidersHorizontal } from "lucide-react";
+import { Link } from "wouter";
+import { ProductCard } from "@/components/CatalogUI";
+import { categories, normalizeApiProducts, products } from "@/lib/catalog";
+import { useCart } from "@/components/SiteShell";
+import { trpc } from "@/lib/trpc";
+
+export default function Products({ cart }: { cart: ReturnType<typeof useCart> }) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const { data: catalogRows } = trpc.catalog.list.useQuery();
+  const liveProducts = normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined);
+  const sourceProducts = liveProducts.length ? liveProducts : products;
+  const filtered = useMemo(() => sourceProducts.filter((product) => {
+    const haystack = [product.name, product.sku, product.shortDescription, product.description, product.category, ...product.tags, ...product.specs.flatMap((spec) => [spec.label, spec.value])].join(" ").toLowerCase();
+    return haystack.includes(query.toLowerCase()) && (category === "All" || product.category === category);
+  }), [query, category, sourceProducts]);
+  return (
+    <div className="min-h-[70vh]">
+      <section className="catalog-heading border-b border-white/[0.08] bg-[#0d1012]"><div className="container flex flex-col justify-between gap-8 py-16 md:flex-row md:items-end md:py-24"><div><p className="eyebrow text-orange-300">Catalog / live index</p><h1 className="mt-4 font-display text-5xl leading-none tracking-[-0.05em] text-white md:text-7xl">Parts for<br /><span className="text-white/30">the build.</span></h1></div><div className="max-w-sm"><p className="text-sm leading-6 text-white/50">Search the current component index by name, SKU, tags, or specification. No category maze — just useful parts.</p><Link href="/support" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-orange-300 hover:text-white">Can’t find a part? Request it <ArrowUpRight size={14} /></Link></div></div></section>
+      <section className="container py-10 md:py-14"><div className="flex flex-col gap-5 border-b border-white/[0.08] pb-8"><div className="relative max-w-2xl"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search product, sensor, microcontroller, SKU..." className="h-14 w-full rounded-sm border border-white/15 bg-[#111416] pl-12 pr-4 font-mono text-xs text-white outline-none placeholder:text-white/25 focus:border-orange-400/70" /></div><div className="flex flex-wrap items-center gap-2"><span className="mr-2 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35"><SlidersHorizontal size={13} /> Filter</span>{categories.map((item) => <button type="button" key={item} onClick={() => setCategory(item)} className={`rounded-full border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${category === item ? "border-orange-400 bg-orange-500/10 text-orange-300" : "border-white/10 text-white/45 hover:border-white/30 hover:text-white"}`}>{item}</button>)}</div></div><div className="flex items-center justify-between py-6"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35"><span className="text-orange-300">{String(filtered.length).padStart(2, "0")}</span> components indexed</p><div className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30 sm:flex"><Filter size={13} /> live catalog</div></div>{filtered.length > 0 ? <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{filtered.map((product) => <ProductCard key={product.id} product={product} onAdd={cart.add} />)}</div> : <div className="border border-dashed border-white/15 py-20 text-center"><Search className="mx-auto text-white/25" size={28} /><h2 className="mt-5 font-display text-2xl text-white">No signal found.</h2><p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-white/45">Couldn’t find what you’re looking for? Send a product request and we’ll investigate the component.</p><Link href="/support?mode=request" className="mt-6 inline-flex items-center gap-2 rounded-sm bg-[#ff6417] px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black">Request a product <ArrowUpRight size={14} /></Link></div>}</section>
+    </div>
+  );
+}

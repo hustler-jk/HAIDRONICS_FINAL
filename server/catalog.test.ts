@@ -1,0 +1,28 @@
+import { describe, expect, it } from "vitest";
+import { cartMessage, findProduct, formatINR, products } from "../client/src/lib/catalog";
+
+describe("HAIDRONICS catalog helpers", () => {
+  it("keeps the starter catalog populated with featured products", () => {
+    expect(products.length).toBeGreaterThanOrEqual(6);
+    expect(products.filter((product) => product.featured).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("formats Indian rupee prices consistently", () => {
+    expect(formatINR(399)).toBe("₹399");
+    expect(formatINR(123456)).toBe("₹1,23,456");
+  });
+
+  it("finds a product by slug-like id", () => {
+    expect(findProduct("esp32-devkit")?.sku).toBe("HD-ESP32-001");
+    expect(findProduct("missing-product")).toBeUndefined();
+  });
+
+  it("creates an order enquiry message without implying confirmation", () => {
+    const product = findProduct("esp32-devkit")!;
+    const message = cartMessage([{ ...product, quantity: 2 }]);
+    expect(message).toContain("Order Enquiry – HAIDRONICS");
+    expect(message).toContain("ESP32 DevKit V1 × 2");
+    expect(message).toContain("Please confirm availability");
+    expect(message).not.toContain("Payment Successful");
+  });
+});
