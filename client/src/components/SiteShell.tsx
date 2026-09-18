@@ -1,13 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 
 const emptyCart: CartItem[] = [];
-export type BusinessSettings = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string };
-const defaultBusinessSettings: BusinessSettings = { businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics" };
+export type BusinessSettings = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string; youtubeUrl: string };
+const defaultBusinessSettings: BusinessSettings = { businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics", youtubeUrl: "https://www.youtube.com/@haidenlabs" };
 const BusinessSettingsContext = createContext<BusinessSettings>(defaultBusinessSettings);
 export function useBusinessSettings() { return useContext(BusinessSettingsContext); }
 
@@ -62,7 +62,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSent, setNewsletterSent] = useState(false);
   const { data: storedSettings } = trpc.catalog.settings.useQuery();
-  const businessSettings: BusinessSettings = { businessName: storedSettings?.businessName || defaultBusinessSettings.businessName, whatsappNumber: storedSettings?.whatsappNumber || defaultBusinessSettings.whatsappNumber, phone: storedSettings?.phone || "", email: storedSettings?.email || "", address: storedSettings?.address || "", businessHours: storedSettings?.businessHours || "", mapsUrl: storedSettings?.mapsUrl || "", instagramUrl: storedSettings?.instagramUrl || defaultBusinessSettings.instagramUrl };
+  const businessSettings: BusinessSettings = { businessName: storedSettings?.businessName || defaultBusinessSettings.businessName, whatsappNumber: storedSettings?.whatsappNumber || defaultBusinessSettings.whatsappNumber, phone: storedSettings?.phone || "", email: storedSettings?.email || "", address: storedSettings?.address || "", businessHours: storedSettings?.businessHours || "", mapsUrl: storedSettings?.mapsUrl || "", instagramUrl: storedSettings?.instagramUrl || defaultBusinessSettings.instagramUrl, youtubeUrl: storedSettings?.youtubeUrl || defaultBusinessSettings.youtubeUrl };
   const newsletter = trpc.newsletter.subscribe.useMutation({ onSuccess: () => { setNewsletterSent(true); setNewsletterEmail(""); } });
   const navItems = [
     ["Products", "/products"],
@@ -147,7 +147,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
             <p className="eyebrow mb-5">Need a hand?</p>
             <p className="max-w-[220px] text-sm leading-6 text-white/55">Send a product question or project brief. We’ll continue the conversation on WhatsApp.</p>
             <a href={whatsappLink("Hi HAIDRONICS, I need help choosing components.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-orange-300 hover:text-white">Start a conversation <ArrowUpRight size={14} /></a>
-            <div className="mt-6 grid gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">{businessSettings.email && <a href={`mailto:${businessSettings.email}`} className="hover:text-orange-300">Email / {businessSettings.email}</a>}<a href={businessSettings.instagramUrl} target="_blank" rel="noreferrer" className="hover:text-orange-300">Instagram / @haidronics</a></div>
+            <div className="mt-6 grid gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">{businessSettings.email && <a href={`mailto:${businessSettings.email}`} className="hover:text-orange-300">Email / {businessSettings.email}</a>}<a href={businessSettings.instagramUrl} target="_blank" rel="noreferrer" className="hover:text-orange-300">Instagram / @haidronics</a><a href={businessSettings.youtubeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-orange-300"><Youtube size={13} /> YouTube / Haiden Labs</a></div>
           </div>
         </div>
         <div className="container flex flex-col gap-3 border-t border-white/[0.08] py-5 font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 sm:flex-row sm:items-center sm:justify-between">

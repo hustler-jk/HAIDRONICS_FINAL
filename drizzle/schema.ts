@@ -97,6 +97,7 @@ export const siteSettings = mysqlTable("siteSettings", {
   businessHours: varchar("businessHours", { length: 180 }),
   mapsUrl: text("mapsUrl"),
   instagramUrl: varchar("instagramUrl", { length: 320 }),
+  youtubeUrl: varchar("youtubeUrl", { length: 320 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
@@ -117,3 +118,18 @@ export const newsletterSubscribers = mysqlTable("newsletterSubscribers", {
   email: varchar("email", { length: 320 }).notNull().unique(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+export const customerStories = mysqlTable("customerStories", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 180 }).notNull(),
+  customerName: varchar("customerName", { length: 160 }),
+  projectType: varchar("projectType", { length: 120 }),
+  caption: text("caption"),
+  imageUrl: text("imageUrl"),
+  featured: int("featured").default(1).notNull(),
+  hidden: int("hidden").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CustomerStory = typeof customerStories.$inferSelect;
+export type InsertCustomerStory = typeof customerStories.$inferInsert;

@@ -1,6 +1,6 @@
 import { desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { analyticsEvents, comboKitItems, comboKits, InsertProduct, newsletterSubscribers, orders, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
+import { analyticsEvents, comboKitItems, comboKits, customerStories, InsertProduct, newsletterSubscribers, orders, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -133,4 +133,19 @@ export async function createComboKit(input: { slug: string; name: string; taglin
 export async function hideComboKit(id: number) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
   return db.update(comboKits).set({ hidden: 1 }).where(eq(comboKits.id, id));
+}
+
+export async function listCustomerStories() {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(customerStories).where(eq(customerStories.hidden, 0)).orderBy(desc(customerStories.createdAt));
+}
+
+export async function createCustomerStory(input: typeof customerStories.$inferInsert) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.insert(customerStories).values(input);
+}
+
+export async function hideCustomerStory(id: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.update(customerStories).set({ hidden: 1 }).where(eq(customerStories.id, id));
 }

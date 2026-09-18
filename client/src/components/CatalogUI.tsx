@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { Product, formatINR } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 
 export function ProductVisual({ product, large = false }: { product: Product; large?: boolean }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showUploadedImage = Boolean(product.imageUrl) && !imageFailed;
   return (
     <div className={`product-art ${large ? "product-art-large" : ""}`} data-variant={product.image} style={{ "--accent": product.accent } as React.CSSProperties}>
-      {product.imageUrl && <img src={product.imageUrl} alt={product.name} className="product-uploaded-image" />}
-      {!product.imageUrl && <>
+      {showUploadedImage && <img src={product.imageUrl} alt={product.name} className="product-uploaded-image" onError={() => setImageFailed(true)} />}
+      {!showUploadedImage && <>
       <div className="art-grid" />
       <div className="art-glow" />
       {product.image === "board" && <><div className="chip chip-main">ESP32</div><div className="chip chip-small">WROOM</div><div className="pin-row" /><div className="board-usb">USB</div></>}
