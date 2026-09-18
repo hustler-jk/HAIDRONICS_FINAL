@@ -21,9 +21,18 @@ describe("HAIDRONICS catalog helpers", () => {
     const product = findProduct("esp32-devkit")!;
     const message = cartMessage([{ ...product, quantity: 2 }]);
     expect(message).toContain("Order Enquiry – HAIDRONICS");
-    expect(message).toContain("ESP32 DevKit V1 × 2");
+    expect(message).toContain("ESP32 DevKit V1 (HD-ESP32-001) × 2");
     expect(message).toContain("Please confirm availability");
     expect(message).not.toContain("Payment Successful");
+  });
+
+  it("includes customer details and line-item pricing in checkout messages", () => {
+    const product = findProduct("esp32-devkit")!;
+    const message = cartMessage([{ ...product, quantity: 2 }], { name: "A Builder", phone: "9876543210", address: "12 Circuit Street, Chennai" });
+    expect(message).toContain("Customer name: A Builder");
+    expect(message).toContain("Phone / WhatsApp: 9876543210");
+    expect(message).toContain("Delivery address: 12 Circuit Street, Chennai");
+    expect(message).toContain("₹798");
   });
 
   it("targets the HAIDRONICS business WhatsApp chat", () => {

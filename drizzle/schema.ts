@@ -27,6 +27,7 @@ export const products = mysqlTable("products", {
   tags: text("tags"),
   specs: text("specs"),
   imageUrl: text("imageUrl"),
+  stockStatus: varchar("stockStatus", { length: 40 }).default("In stock").notNull(),
   featured: int("featured").default(0).notNull(),
   hidden: int("hidden").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -57,6 +58,7 @@ export const comboKitItems = mysqlTable("comboKitItems", {
 
 export const projectRequests = mysqlTable("projectRequests", {
   id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
   name: varchar("name", { length: 160 }).notNull(),
   phone: varchar("phone", { length: 80 }).notNull(),
   projectName: varchar("projectName", { length: 180 }),
@@ -68,6 +70,7 @@ export const projectRequests = mysqlTable("projectRequests", {
 
 export const productRequests = mysqlTable("productRequests", {
   id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
   component: varchar("component", { length: 180 }).notNull(),
   quantity: int("quantity").default(1).notNull(),
   reference: text("reference"),
@@ -94,4 +97,22 @@ export const siteSettings = mysqlTable("siteSettings", {
   businessHours: varchar("businessHours", { length: 180 }),
   mapsUrl: text("mapsUrl"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const orders = mysqlTable("orders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  customerName: varchar("customerName", { length: 160 }).notNull(),
+  phone: varchar("phone", { length: 80 }).notNull(),
+  address: text("address").notNull(),
+  items: text("items").notNull(),
+  total: int("total").notNull(),
+  status: varchar("status", { length: 40 }).default("whatsapp_pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const newsletterSubscribers = mysqlTable("newsletterSubscribers", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

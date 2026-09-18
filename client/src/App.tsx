@@ -12,6 +12,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Cart from "./pages/Cart";
 import Account from "./pages/Account";
+import BusinessInfo from "./pages/BusinessInfo";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,10 @@ function StoreRouter({ cart }: { cart: ReturnType<typeof useCart> }) {
     <Route path="/contact"><Contact /></Route>
     <Route path="/cart"><Cart cart={cart} /></Route>
     <Route path="/account"><Account /></Route>
+    <Route path="/faq"><BusinessInfo /></Route>
+    <Route path="/shipping-returns"><BusinessInfo /></Route>
+    <Route path="/privacy"><BusinessInfo /></Route>
+    <Route path="/terms"><BusinessInfo /></Route>
     <Route path="/404"><NotFound /></Route>
     <Route><NotFound /></Route>
   </Switch>;

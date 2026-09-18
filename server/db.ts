@@ -1,6 +1,6 @@
 import { desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { analyticsEvents, comboKitItems, comboKits, InsertProduct, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
+import { analyticsEvents, comboKitItems, comboKits, InsertProduct, newsletterSubscribers, orders, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -52,6 +52,10 @@ export async function createCatalogProduct(product: InsertProduct) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
   return db.insert(products).values(product);
 }
+export async function updateCatalogProduct(id: number, product: Partial<InsertProduct>) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.update(products).set(product).where(eq(products.id, id));
+}
 export async function deleteCatalogProduct(id: number) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
   return db.update(products).set({ hidden: 1 }).where(eq(products.id, id));
@@ -63,6 +67,25 @@ export async function saveProjectRequest(input: typeof projectRequests.$inferIns
 export async function saveProductRequest(input: typeof productRequests.$inferInsert) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
   return db.insert(productRequests).values(input);
+}
+export async function createOrder(input: typeof orders.$inferInsert) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.insert(orders).values(input);
+}
+export async function listOrdersForUser(userId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
+}
+export async function listRequestsForUser(userId: number) {
+  const db = await getDb(); if (!db) return { projects: [], products: [] };
+  return {
+    projects: await db.select().from(projectRequests).where(eq(projectRequests.userId, userId)).orderBy(desc(projectRequests.createdAt)),
+    products: await db.select().from(productRequests).where(eq(productRequests.userId, userId)).orderBy(desc(productRequests.createdAt)),
+  };
+}
+export async function subscribeNewsletter(email: string) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.insert(newsletterSubscribers).values({ email }).onDuplicateKeyUpdate({ set: { email } });
 }
 export async function recordAnalyticsEvent(input: typeof analyticsEvents.$inferInsert) {
   const db = await getDb(); if (!db) return;

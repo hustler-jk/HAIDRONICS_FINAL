@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
+import { trpc } from "@/lib/trpc";
 
 const emptyCart: CartItem[] = [];
 
@@ -54,6 +55,9 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
   const [location, navigate] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSent, setNewsletterSent] = useState(false);
+  const newsletter = trpc.newsletter.subscribe.useMutation({ onSuccess: () => { setNewsletterSent(true); setNewsletterEmail(""); } });
   const navItems = [
     ["Products", "/products"],
     ["Project support", "/support"],
@@ -107,7 +111,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
       <main>{children}</main>
 
       <footer className="border-t border-white/[0.08] bg-[#070809]">
-        <div className="container grid gap-12 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="container grid gap-12 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <BrandMark />
             <img src={logoImage} alt="HAIDRONICS — Where Engineering Starts" className="mt-6 h-20 w-36 object-contain object-left opacity-70" />
@@ -121,7 +125,16 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
               <Link href="/support" className="hover:text-orange-300">Project support</Link>
               <Link href="/about" className="hover:text-orange-300">About HAIDRONICS</Link>
               <Link href="/contact" className="hover:text-orange-300">Contact</Link>
+              <Link href="/faq" className="hover:text-orange-300">FAQ</Link>
+              <Link href="/shipping-returns" className="hover:text-orange-300">Shipping & returns</Link>
+              <Link href="/privacy" className="hover:text-orange-300">Privacy</Link>
+              <Link href="/terms" className="hover:text-orange-300">Terms</Link>
             </div>
+          </div>
+          <div>
+            <p className="eyebrow mb-5">Build notes / occasional</p>
+            <p className="max-w-[250px] text-sm leading-6 text-white/55">Get practical component drops and build notes. No noise.</p>
+            {newsletterSent ? <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.13em] text-emerald-300">You’re on the list.</p> : <form className="mt-5 flex max-w-[280px] gap-2" onSubmit={(event) => { event.preventDefault(); newsletter.mutate({ email: newsletterEmail }); }}><input type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="you@example.com" className="h-10 min-w-0 flex-1 border border-white/15 bg-white/[0.04] px-3 text-xs text-white outline-none focus:border-orange-400" /><button type="submit" disabled={newsletter.isPending} className="h-10 bg-orange-500 px-3 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-black">Join</button></form>}
           </div>
           <div>
             <p className="eyebrow mb-5">Need a hand?</p>
@@ -144,7 +157,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
             ) : (
               <>
                 <div className="flex-1 space-y-4 overflow-y-auto py-6">{cart.items.map((item) => <div key={item.id} className="flex gap-3 border-b border-white/[0.08] pb-4"><div className="product-mini-art" data-variant={item.image}><span>{item.image === "board" ? "ESP32" : item.image.toUpperCase()}</span></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-white">{item.name}</p><p className="mt-1 font-mono text-xs text-orange-300">{formatINR(item.price)} × {item.quantity}</p><div className="mt-2 flex items-center gap-2"><button type="button" className="quantity-button" onClick={() => cart.changeQuantity(item.id, item.quantity - 1)}>−</button><span className="font-mono text-xs text-white/70">{item.quantity}</span><button type="button" className="quantity-button" onClick={() => cart.changeQuantity(item.id, item.quantity + 1)}>+</button><button type="button" className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-white/35 hover:text-red-300" onClick={() => cart.remove(item.id)}>Remove</button></div></div></div>)}</div>
-                <div className="border-t border-white/10 pt-5"><div className="flex items-center justify-between font-mono text-xs uppercase tracking-[0.12em] text-white/45"><span>Estimated total</span><strong className="text-base text-white">{formatINR(cart.total)}</strong></div><a href={whatsappLink(cartMessage(cart.items))} target="_blank" rel="noreferrer" className="mt-5 flex w-full items-center justify-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-black hover:bg-orange-300 active:scale-[0.98]"><MessageCircle size={15} /> Send order enquiry</a><button type="button" className="mt-3 w-full py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white" onClick={cart.clear}>Clear cart</button></div>
+                <div className="border-t border-white/10 pt-5"><div className="flex items-center justify-between font-mono text-xs uppercase tracking-[0.12em] text-white/45"><span>Estimated total</span><strong className="text-base text-white">{formatINR(cart.total)}</strong></div><Link href="/cart" className="mt-5 flex w-full items-center justify-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-black hover:bg-orange-300 active:scale-[0.98]"><MessageCircle size={15} /> Continue to checkout</Link><button type="button" className="mt-3 w-full py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white" onClick={cart.clear}>Clear cart</button></div>
               </>
             )}
           </aside>

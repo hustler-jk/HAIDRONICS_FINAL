@@ -1,14 +1,15 @@
 import { ArrowRight, ArrowUpRight, Boxes, CircuitBoard, MessageCircle, MoveUpRight, Sparkles, Wrench } from "lucide-react";
 import { Link } from "wouter";
 import { ProductCard, ProductVisual } from "@/components/CatalogUI";
-import { heroImage, normalizeApiProducts, products, whatsappLink } from "@/lib/catalog";
+import { categories, heroImage, mergeProductSources, normalizeApiProducts, products, whatsappLink } from "@/lib/catalog";
 import { useCart } from "@/components/SiteShell";
 import { trpc } from "@/lib/trpc";
 
 export default function Home({ cart }: { cart: ReturnType<typeof useCart> }) {
   const { data: catalogRows } = trpc.catalog.list.useQuery();
   const liveProducts = normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined);
-  const featured = (liveProducts.length ? liveProducts : products).filter((product) => product.featured);
+  const sourceProducts = mergeProductSources(liveProducts, products);
+  const featured = sourceProducts.filter((product) => product.featured);
   return (
     <>
       <section className="hero-shell relative overflow-hidden">
@@ -31,6 +32,8 @@ export default function Home({ cart }: { cart: ReturnType<typeof useCart> }) {
       </section>
 
       <section className="container py-24 md:py-32"><div className="flex flex-col justify-between gap-6 md:flex-row md:items-end"><div><p className="eyebrow text-orange-300">Signal / 01</p><h2 className="mt-3 max-w-xl font-display text-4xl leading-tight text-white md:text-5xl">Featured for the<br /><span className="text-white/35">next prototype.</span></h2></div><Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300 hover:text-white">View full catalog <ArrowUpRight size={15} /></Link></div><div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{featured.map((product) => <ProductCard key={product.id} product={product} onAdd={cart.add} />)}</div></section>
+
+      <section className="border-y border-white/[0.08] bg-[#0d1012] py-16"><div className="container"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="eyebrow text-orange-300">Collections / browse by signal</p><h2 className="mt-3 font-display text-4xl text-white">Start where your build starts<span className="text-orange-300">.</span></h2></div><Link href="/products" className="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-orange-300">Explore all parts →</Link></div><div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{categories.filter((category) => category !== "All").map((category, index) => <Link key={category} href={`/products?category=${encodeURIComponent(category)}`} className="group border border-white/10 bg-white/[0.02] p-5 transition-colors hover:border-orange-400/50 hover:bg-orange-500/[0.06]"><p className="font-mono text-[9px] uppercase tracking-[0.15em] text-orange-300">0{index + 1} / collection</p><p className="mt-8 font-display text-2xl text-white group-hover:text-orange-300">{category}</p><p className="mt-2 text-sm text-white/35">{sourceProducts.filter((product) => product.category === category).length} indexed signals</p></Link>)}</div></div></section>
 
       <section className="border-y border-white/[0.08] bg-[#f2eee7] py-20 text-[#111416] md:py-28"><div className="container grid items-end gap-12 md:grid-cols-[0.9fr_1.1fr]"><div><p className="eyebrow text-[#ec5c19]">Why HAIDRONICS</p><h2 className="mt-4 max-w-md font-display text-4xl leading-[0.97] tracking-[-0.04em] md:text-6xl">Less hunting.<br /><span className="text-black/30">More making.</span></h2></div><div className="grid gap-0 border-t border-black/15 sm:grid-cols-2"><div className="border-b border-black/15 py-5 sm:pr-6"><p className="font-display text-xl">01 <span className="ml-3 text-black/35">Clear specs</span></p><p className="mt-2 text-sm leading-6 text-black/55">The details you need to make a confident next move.</p></div><div className="border-b border-black/15 py-5 sm:pl-6"><p className="font-display text-xl">02 <span className="ml-3 text-black/35">Builder-first</span></p><p className="mt-2 text-sm leading-6 text-black/55">A focused catalog for students, hobbyists, and small teams.</p></div><div className="py-5 sm:pr-6"><p className="font-display text-xl">03 <span className="ml-3 text-black/35">Human support</span></p><p className="mt-2 text-sm leading-6 text-black/55">Ask about a part, a project, or a better way to wire it up.</p></div><div className="py-5 sm:pl-6"><p className="font-display text-xl">04 <span className="ml-3 text-black/35">Flexible ordering</span></p><p className="mt-2 text-sm leading-6 text-black/55">Build an order enquiry and confirm the final details directly.</p></div></div></div></section>
 

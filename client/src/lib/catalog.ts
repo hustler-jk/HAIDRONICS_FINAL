@@ -10,6 +10,8 @@ export type Product = {
   tags: string[];
   accent: string;
   image: string;
+  imageUrl?: string;
+  stockStatus?: string;
   specs: { label: string; value: string }[];
   featured?: boolean;
 };
@@ -159,10 +161,11 @@ export function productEnquiry(product: Product) {
   return `Order Enquiry – HAIDRONICS\n\nI am interested in:\n${product.name}\nSKU: ${product.sku}\n\nPlease confirm availability, final price, shipping charges, payment details, and delivery information.`;
 }
 
-export function cartMessage(items: CartItem[]) {
-  const lines = items.map((item, index) => `${index + 1}. ${item.name} × ${item.quantity}`);
+export function cartMessage(items: CartItem[], customer?: { name: string; phone: string; address: string }) {
+  const lines = items.map((item, index) => `${index + 1}. ${item.name} (${item.sku}) × ${item.quantity} — ${formatINR(item.price * item.quantity)}`);
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  return `Order Enquiry – HAIDRONICS\n\nI would like to enquire about:\n${lines.join("\n")}\n\nEstimated Total: ${formatINR(total)}\n\nPlease confirm availability, final price, shipping charges, payment details, and delivery information.`;
+  const customerBlock = customer ? `Customer name: ${customer.name}\nPhone / WhatsApp: ${customer.phone}\nDelivery address: ${customer.address}\n\n` : "";
+  return `Order Enquiry – HAIDRONICS\n\n${customerBlock}Components requested:\n${lines.join("\n")}\n\nEstimated Total: ${formatINR(total)}\n\nPlease confirm availability, final price, shipping charges, payment details, and delivery information.`;
 }
 
 export function findProduct(id: string) {
@@ -179,6 +182,8 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
     return {
       id: String(row.slug || row.id || `product-${index}`),
       dbId: typeof row.id === "number" ? row.id : undefined,
+      imageUrl: typeof row.imageUrl === "string" ? row.imageUrl : undefined,
+      stockStatus: String(row.stockStatus || "In stock"),
       name: String(row.name || "Untitled component"),
       sku: String(row.sku || "HD-CATALOG"),
       price: Number(row.price || 0),
@@ -187,7 +192,7 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
       category: String(row.category || "Components"),
       tags: rawTags.split(",").map((tag) => tag.trim()).filter(Boolean),
       accent: "#ff6417",
-      image: "board",
+      image: String(row.slug || "").includes("oled") ? "oled" : String(row.slug || "").includes("dht") ? "sensor" : String(row.slug || "").includes("arduino") ? "uno" : String(row.slug || "").includes("ultrasonic") ? "ultrasonic" : String(row.slug || "").includes("relay") ? "relay" : "board",
       featured: Number(row.featured || 0) === 1,
       specs,
     };

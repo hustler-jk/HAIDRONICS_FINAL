@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
 
 export default function Products({ cart }: { cart: ReturnType<typeof useCart> }) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState(() => new URLSearchParams(window.location.search).get("category") || "All");
   const { data: catalogRows } = trpc.catalog.list.useQuery();
   const { data: comboRows } = trpc.catalog.comboKits.useQuery();
   const { data: searchRows, isFetching: searchFetching } = trpc.catalog.search.useQuery({ query }, { enabled: query.trim().length >= 2, retry: false });
