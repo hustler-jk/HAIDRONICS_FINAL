@@ -96,6 +96,7 @@ export const siteSettings = mysqlTable("siteSettings", {
   address: text("address"),
   businessHours: varchar("businessHours", { length: 180 }),
   mapsUrl: text("mapsUrl"),
+  instagramUrl: varchar("instagramUrl", { length: 320 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

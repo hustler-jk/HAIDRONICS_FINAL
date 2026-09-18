@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { ArrowUpRight, Check, MessageCircle, Send, Sparkles } from "lucide-react";
 import { Link } from "wouter";
+import { useBusinessSettings } from "@/components/SiteShell";
 import { whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 
@@ -8,6 +9,7 @@ const initialProject = { name: "", phone: "", project: "", building: "", compone
 const initialRequest = { component: "", quantity: "1", reference: "", notes: "" };
 
 export default function Support() {
+  const settings = useBusinessSettings();
   const [mode, setMode] = useState<"project" | "request">(new URLSearchParams(window.location.search).get("mode") === "request" ? "request" : "project");
   const [project, setProject] = useState(initialProject);
   const [request, setRequest] = useState(initialRequest);

@@ -29,6 +29,13 @@
       "when": 1789752488827,
       "tag": "0003_modern_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1789753937012,
+      "tag": "0004_rich_sway",
+      "breakpoints": true
     }
   ]
 }

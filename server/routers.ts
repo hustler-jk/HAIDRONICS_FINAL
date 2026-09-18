@@ -58,7 +58,7 @@ export const appRouter = router({
       list: adminProcedure.query(() => listAnalyticsEvents()),
     }),
     settings: router({
-      save: adminProcedure.input(z.object({ businessName: z.string().min(1), whatsappNumber: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), businessHours: z.string().optional(), mapsUrl: z.string().optional() })).mutation(({ input }) => saveSiteSettings(input).then(() => ({ success: true }))),
+      save: adminProcedure.input(z.object({ businessName: z.string().min(1), whatsappNumber: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), businessHours: z.string().optional(), mapsUrl: z.string().optional(), instagramUrl: z.string().url().optional() })).mutation(({ input }) => saveSiteSettings(input).then(() => ({ success: true }))),
     }),
   }),
 });

@@ -152,8 +152,8 @@ export const formatINR = (amount: number) => `₹${amount.toLocaleString("en-IN"
 
 export const whatsappNumber = "918248453861";
 
-export function whatsappLink(message: string) {
-  const number = whatsappNumber.replace(/\D/g, "");
+export function whatsappLink(message: string, configuredNumber = whatsappNumber) {
+  const number = configuredNumber.replace(/\D/g, "");
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 

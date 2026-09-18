@@ -1,11 +1,15 @@
 import { Link, useLocation } from "wouter";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 
 const emptyCart: CartItem[] = [];
+export type BusinessSettings = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string };
+const defaultBusinessSettings: BusinessSettings = { businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics" };
+const BusinessSettingsContext = createContext<BusinessSettings>(defaultBusinessSettings);
+export function useBusinessSettings() { return useContext(BusinessSettingsContext); }
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
@@ -57,6 +61,8 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
   const [cartOpen, setCartOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSent, setNewsletterSent] = useState(false);
+  const { data: storedSettings } = trpc.catalog.settings.useQuery();
+  const businessSettings: BusinessSettings = { businessName: storedSettings?.businessName || defaultBusinessSettings.businessName, whatsappNumber: storedSettings?.whatsappNumber || defaultBusinessSettings.whatsappNumber, phone: storedSettings?.phone || "", email: storedSettings?.email || "", address: storedSettings?.address || "", businessHours: storedSettings?.businessHours || "", mapsUrl: storedSettings?.mapsUrl || "", instagramUrl: storedSettings?.instagramUrl || defaultBusinessSettings.instagramUrl };
   const newsletter = trpc.newsletter.subscribe.useMutation({ onSuccess: () => { setNewsletterSent(true); setNewsletterEmail(""); } });
   const navItems = [
     ["Products", "/products"],
@@ -73,6 +79,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
   const cartLabel = useMemo(() => cart.count > 9 ? "9+" : String(cart.count), [cart.count]);
 
   return (
+    <BusinessSettingsContext.Provider value={businessSettings}>
     <div className="min-h-screen bg-[#090b0d] text-[#f6f3ee] selection:bg-orange-500/30">
       <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#090b0d]/90 backdrop-blur-xl">
         <div className="container flex h-[74px] items-center justify-between gap-5">
@@ -89,7 +96,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
               <ShoppingBag size={18} strokeWidth={1.7} />
               {cart.count > 0 && <span className="absolute -right-1.5 -top-1.5 grid size-4 place-items-center rounded-full bg-[#ff6417] font-mono text-[9px] font-bold text-black">{cartLabel}</span>}
             </button>
-            <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.")} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full bg-[#ff6417] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-black transition-transform hover:-translate-y-0.5 active:scale-95 md:inline-flex">
+            <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full bg-[#ff6417] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-black transition-transform hover:-translate-y-0.5 active:scale-95 md:inline-flex">
               <MessageCircle size={15} /> WhatsApp
             </a>
             <button type="button" className="icon-button lg:hidden" aria-label="Open menu" onClick={() => setMenuOpen((open) => !open)}>
@@ -102,7 +109,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
             <nav className="container flex flex-col gap-1">
               {navItems.map(([label, href]) => <Link key={href} href={href} className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">{label}</Link>)}
               <Link href="/account" className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">Account / sign in</Link>
-              <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.")} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-md bg-[#ff6417] px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-black"><MessageCircle size={15} /> Chat on WhatsApp</a>
+              <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-md bg-[#ff6417] px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-black"><MessageCircle size={15} /> Chat on WhatsApp</a>
             </nav>
           </div>
         )}
@@ -139,7 +146,8 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
           <div>
             <p className="eyebrow mb-5">Need a hand?</p>
             <p className="max-w-[220px] text-sm leading-6 text-white/55">Send a product question or project brief. We’ll continue the conversation on WhatsApp.</p>
-            <a href={whatsappLink("Hi HAIDRONICS, I need help choosing components.")} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-orange-300 hover:text-white">Start a conversation <ArrowUpRight size={14} /></a>
+            <a href={whatsappLink("Hi HAIDRONICS, I need help choosing components.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-orange-300 hover:text-white">Start a conversation <ArrowUpRight size={14} /></a>
+            <div className="mt-6 grid gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">{businessSettings.email && <a href={`mailto:${businessSettings.email}`} className="hover:text-orange-300">Email / {businessSettings.email}</a>}<a href={businessSettings.instagramUrl} target="_blank" rel="noreferrer" className="hover:text-orange-300">Instagram / @haidronics</a></div>
           </div>
         </div>
         <div className="container flex flex-col gap-3 border-t border-white/[0.08] py-5 font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 sm:flex-row sm:items-center sm:justify-between">
@@ -164,5 +172,6 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
         </div>
       )}
     </div>
+    </BusinessSettingsContext.Provider>
   );
 }
