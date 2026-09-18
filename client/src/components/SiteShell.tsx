@@ -2,19 +2,14 @@ import { Link, useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CartItem, Product, cartMessage, formatINR, whatsappLink } from "@/lib/catalog";
+import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
 
 const emptyCart: CartItem[] = [];
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="group inline-flex items-center gap-3" aria-label="HAIDRONICS home">
-      <span className="brand-mark" aria-hidden="true">
-        <span className="brand-mark-line brand-mark-line-a" />
-        <span className="brand-mark-line brand-mark-line-b" />
-        <span className="brand-mark-node brand-mark-node-a" />
-        <span className="brand-mark-node brand-mark-node-b" />
-      </span>
+      <img src={logoIconImage} alt="" className="brand-image" aria-hidden="true" />
       <span className="leading-none">
         <span className="block font-display text-[1.1rem] font-semibold tracking-[0.19em] text-white group-hover:text-orange-300 transition-colors">HAIDRONICS</span>
         {!compact && <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.22em] text-white/45">Where engineering starts</span>}
@@ -113,6 +108,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
         <div className="container grid gap-12 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <BrandMark />
+            <img src={logoImage} alt="HAIDRONICS — Where Engineering Starts" className="mt-6 h-20 w-36 object-contain object-left opacity-70" />
             <p className="mt-5 max-w-xs text-sm leading-6 text-white/46">A focused parts catalog for builders, students, and teams moving from first sketch to working prototype.</p>
             <div className="mt-7 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-orange-300/80"><span className="h-px w-8 bg-orange-500" /> cloud catalog / v1</div>
           </div>

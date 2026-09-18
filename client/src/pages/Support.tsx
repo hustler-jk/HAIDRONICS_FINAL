@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { ArrowUpRight, Check, MessageCircle, Send, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { whatsappLink } from "@/lib/catalog";
+import { trpc } from "@/lib/trpc";
 
 const initialProject = { name: "", phone: "", project: "", building: "", components: "", budget: "" };
 const initialRequest = { component: "", quantity: "1", reference: "", notes: "" };
@@ -11,7 +12,13 @@ export default function Support() {
   const [project, setProject] = useState(initialProject);
   const [request, setRequest] = useState(initialRequest);
   const [sent, setSent] = useState(false);
-  const submit = (event: FormEvent) => { event.preventDefault(); setSent(true); };
+  const projectMutation = trpc.requests.project.useMutation({ onSuccess: () => setSent(true) });
+  const productMutation = trpc.requests.product.useMutation({ onSuccess: () => setSent(true) });
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (mode === "project") projectMutation.mutate({ name: project.name, phone: project.phone, projectName: project.project, building: project.building, components: project.components, budget: project.budget });
+    else productMutation.mutate({ component: request.component, quantity: Number(request.quantity) || 1, reference: request.reference, notes: request.notes });
+  };
   const projectMessage = `Hi HAIDRONICS, I need project support.\n\nName: ${project.name}\nPhone / WhatsApp: ${project.phone}\nProject: ${project.project}\nWhat I’m building: ${project.building}\nComponents: ${project.components}\nBudget: ${project.budget}`;
   return (
     <div className="min-h-[70vh]"><section className="border-b border-white/[0.08] bg-[#0d1012]"><div className="container grid gap-12 py-16 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-end"><div><p className="eyebrow text-orange-300">Open channel / support</p><h1 className="mt-4 max-w-xl font-display text-5xl leading-[0.93] tracking-[-0.05em] text-white md:text-7xl">Build with a<br /><span className="text-orange-400">clearer brief.</span></h1><p className="mt-7 max-w-md text-base leading-7 text-white/55">Not sure which components you need? Send a project outline or request a product that isn’t in the current index.</p></div><div className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10"><button type="button" onClick={() => { setMode("project"); setSent(false); }} className={`p-5 text-left transition-colors ${mode === "project" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}><Sparkles size={18} /><p className="mt-8 font-display text-xl">Project support</p><p className={`mt-2 text-xs leading-5 ${mode === "project" ? "text-black/60" : "text-white/45"}`}>Talk through the build.</p></button><button type="button" onClick={() => { setMode("request"); setSent(false); }} className={`p-5 text-left transition-colors ${mode === "request" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}><Send size={18} /><p className="mt-8 font-display text-xl">Request a product</p><p className={`mt-2 text-xs leading-5 ${mode === "request" ? "text-black/60" : "text-white/45"}`}>Flag a missing part.</p></button></div></div></section>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
-import { createCatalogProduct, deleteCatalogProduct, getCatalogProduct, getSiteSettings, listCatalogProducts, recordAnalyticsEvent, saveProductRequest, saveProjectRequest } from "./db";
+import { createCatalogProduct, deleteCatalogProduct, getCatalogProduct, getSiteSettings, listAnalyticsEvents, listCatalogProducts, listProductRequests, listProjectRequests, recordAnalyticsEvent, saveProductRequest, saveProjectRequest, saveSiteSettings } from "./db";
 
 const productInput = z.object({
   slug: z.string().min(1).max(180), name: z.string().min(1).max(180), sku: z.string().max(80).optional(), price: z.number().int().nonnegative(), shortDescription: z.string().optional(), description: z.string().optional(), category: z.string().max(80).optional(), tags: z.string().optional(), specs: z.string().optional(), imageUrl: z.string().optional(), featured: z.number().int().min(0).max(1).optional(),
@@ -31,6 +31,15 @@ export const appRouter = router({
       list: adminProcedure.query(() => listCatalogProducts()),
       create: adminProcedure.input(productInput).mutation(({ input }) => createCatalogProduct(input).then(() => ({ success: true }))),
       hide: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteCatalogProduct(input.id).then(() => ({ success: true }))),
+    }),
+    requests: router({
+      list: adminProcedure.query(async () => ({ projects: await listProjectRequests(), products: await listProductRequests() })),
+    }),
+    analytics: router({
+      list: adminProcedure.query(() => listAnalyticsEvents()),
+    }),
+    settings: router({
+      save: adminProcedure.input(z.object({ businessName: z.string().min(1), whatsappNumber: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), businessHours: z.string().optional(), mapsUrl: z.string().optional() })).mutation(({ input }) => saveSiteSettings(input).then(() => ({ success: true }))),
     }),
   }),
 });

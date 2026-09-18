@@ -1,5 +1,6 @@
 export type Product = {
   id: string;
+  dbId?: number;
   name: string;
   sku: string;
   price: number;
@@ -16,6 +17,8 @@ export type Product = {
 export type CartItem = Product & { quantity: number };
 
 export const heroImage = "/manus-storage/haidronics-circuit-hero_4fdc732d.jpg";
+export const logoImage = "/manus-storage/haidronics-logo_51ad85ad.png";
+export const logoIconImage = "/manus-storage/haidronics-icon_0c53ca1d.png";
 
 export const products: Product[] = [
   {
@@ -134,7 +137,7 @@ export const products: Product[] = [
 
 export const formatINR = (amount: number) => `₹${amount.toLocaleString("en-IN")}`;
 
-export const whatsappNumber = "";
+export const whatsappNumber = "918248453861";
 
 export function whatsappLink(message: string) {
   const number = whatsappNumber.replace(/\D/g, "");
@@ -164,6 +167,7 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
     try { specs = JSON.parse(rawSpecs); } catch { specs = []; }
     return {
       id: String(row.slug || row.id || `product-${index}`),
+      dbId: typeof row.id === "number" ? row.id : undefined,
       name: String(row.name || "Untitled component"),
       sku: String(row.sku || "HD-CATALOG"),
       price: Number(row.price || 0),

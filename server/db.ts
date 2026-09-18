@@ -67,3 +67,23 @@ export async function getSiteSettings() {
   const result = await db.select().from(siteSettings).limit(1);
   return result[0];
 }
+
+export async function saveSiteSettings(input: Partial<typeof siteSettings.$inferInsert>) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.insert(siteSettings).values({ id: 1, ...input }).onDuplicateKeyUpdate({ set: input });
+}
+
+export async function listProjectRequests() {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(projectRequests).orderBy(desc(projectRequests.createdAt));
+}
+
+export async function listProductRequests() {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(productRequests).orderBy(desc(productRequests.createdAt));
+}
+
+export async function listAnalyticsEvents() {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(analyticsEvents).orderBy(desc(analyticsEvents.createdAt)).limit(500);
+}

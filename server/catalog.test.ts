@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cartMessage, findProduct, formatINR, products } from "../client/src/lib/catalog";
+import { cartMessage, findProduct, formatINR, products, whatsappLink } from "../client/src/lib/catalog";
 
 describe("HAIDRONICS catalog helpers", () => {
   it("keeps the starter catalog populated with featured products", () => {
@@ -24,5 +24,9 @@ describe("HAIDRONICS catalog helpers", () => {
     expect(message).toContain("ESP32 DevKit V1 × 2");
     expect(message).toContain("Please confirm availability");
     expect(message).not.toContain("Payment Successful");
+  });
+
+  it("targets the HAIDRONICS business WhatsApp chat", () => {
+    expect(whatsappLink("hello")).toContain("https://wa.me/918248453861?text=");
   });
 });

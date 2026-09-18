@@ -74,6 +74,7 @@ button { cursor: pointer; }
   .icon-button { display: inline-flex; height: 38px; width: 38px; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.11); border-radius: 999px; color: rgba(255,255,255,.72); transition: color 180ms ease, border-color 180ms ease, transform 180ms ease; }
   .icon-button:hover { border-color: rgba(255,111,31,.6); color: #ff9a64; transform: translateY(-1px); }
   .brand-mark { position: relative; display: inline-block; height: 33px; width: 33px; flex: none; border: 1px solid rgba(255,105,25,.65); background: #121516; clip-path: polygon(22% 0, 78% 0, 100% 22%, 100% 78%, 78% 100%, 22% 100%, 0 78%, 0 22%); }
+  .brand-image { display: block; height: 38px; width: 38px; flex: none; border-radius: 5px; object-fit: cover; object-position: center; box-shadow: 0 0 18px rgba(255,100,23,.18); }
   .brand-mark::before, .brand-mark::after { content: ""; position: absolute; background: #ff6417; }
   .brand-mark::before { left: 7px; right: 7px; top: 15px; height: 2px; }
   .brand-mark::after { top: 7px; bottom: 7px; left: 15px; width: 2px; }
