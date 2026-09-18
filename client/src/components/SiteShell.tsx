@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
 
@@ -80,6 +80,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
           </nav>
           <div className="flex items-center gap-2">
             <Link href="/products" aria-label="Search products" className="icon-button hidden sm:inline-flex"><Search size={18} strokeWidth={1.7} /></Link>
+            <Link href="/account" aria-label="Account" className="icon-button hidden sm:inline-flex"><UserRound size={18} strokeWidth={1.7} /></Link>
             <button type="button" className="icon-button relative" aria-label="Open cart" onClick={() => setCartOpen(true)}>
               <ShoppingBag size={18} strokeWidth={1.7} />
               {cart.count > 0 && <span className="absolute -right-1.5 -top-1.5 grid size-4 place-items-center rounded-full bg-[#ff6417] font-mono text-[9px] font-bold text-black">{cartLabel}</span>}
@@ -96,6 +97,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
           <div className="border-t border-white/[0.08] bg-[#0d1012] px-5 py-4 lg:hidden">
             <nav className="container flex flex-col gap-1">
               {navItems.map(([label, href]) => <Link key={href} href={href} className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">{label}</Link>)}
+              <Link href="/account" className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">Account / sign in</Link>
               <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.")} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-md bg-[#ff6417] px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-black"><MessageCircle size={15} /> Chat on WhatsApp</a>
             </nav>
           </div>

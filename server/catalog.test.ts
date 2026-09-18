@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cartMessage, findProduct, formatINR, products, whatsappLink } from "../client/src/lib/catalog";
+import { cartMessage, findProduct, formatINR, normalizeApiComboKits, products, recommendedProducts, whatsappLink } from "../client/src/lib/catalog";
 
 describe("HAIDRONICS catalog helpers", () => {
   it("keeps the starter catalog populated with featured products", () => {
@@ -28,5 +28,16 @@ describe("HAIDRONICS catalog helpers", () => {
 
   it("targets the HAIDRONICS business WhatsApp chat", () => {
     expect(whatsappLink("hello")).toContain("https://wa.me/918248453861?text=");
+  });
+
+  it("ranks same-category products first for recommendations", () => {
+    const product = findProduct("esp32-devkit")!;
+    expect(recommendedProducts(product, products)[0].category).toBe(product.category);
+  });
+
+  it("normalizes combo kits returned by the catalog API", () => {
+    const kits = normalizeApiComboKits([{ id: 7, slug: "iot-starter", name: "IoT Starter", price: 999, featured: 1, items: [{ productSlug: "esp32-devkit", quantity: 1 }] }]);
+    expect(kits[0]).toMatchObject({ id: 7, slug: "iot-starter", name: "IoT Starter", price: 999, featured: true });
+    expect(kits[0].items[0].productSlug).toBe("esp32-devkit");
   });
 });

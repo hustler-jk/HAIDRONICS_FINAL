@@ -35,6 +35,26 @@ export const products = mysqlTable("products", {
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = typeof products.$inferInsert;
 
+export const comboKits = mysqlTable("comboKits", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 180 }).notNull().unique(),
+  name: varchar("name", { length: 180 }).notNull(),
+  tagline: varchar("tagline", { length: 255 }),
+  description: text("description"),
+  price: int("price").default(0).notNull(),
+  featured: int("featured").default(0).notNull(),
+  hidden: int("hidden").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const comboKitItems = mysqlTable("comboKitItems", {
+  id: int("id").autoincrement().primaryKey(),
+  comboKitId: int("comboKitId").notNull(),
+  productSlug: varchar("productSlug", { length: 180 }).notNull(),
+  quantity: int("quantity").default(1).notNull(),
+});
+
 export const projectRequests = mysqlTable("projectRequests", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 160 }).notNull(),

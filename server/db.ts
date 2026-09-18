@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { analyticsEvents, InsertProduct, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
+import { analyticsEvents, comboKitItems, comboKits, InsertProduct, products, productRequests, projectRequests, siteSettings, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -36,6 +36,12 @@ export async function getUserByOpenId(openId: string) {
 export async function listCatalogProducts() {
   const db = await getDb(); if (!db) return [];
   return db.select().from(products).where(eq(products.hidden, 0)).orderBy(desc(products.createdAt));
+}
+
+export async function searchCatalogProducts(query: string) {
+  const db = await getDb(); if (!db) return [];
+  const term = `%${query.trim()}%`;
+  return db.select().from(products).where(or(like(products.name, term), like(products.sku, term), like(products.shortDescription, term), like(products.description, term), like(products.category, term), like(products.tags, term), like(products.specs, term))).orderBy(desc(products.createdAt));
 }
 export async function getCatalogProduct(slug: string) {
   const db = await getDb(); if (!db) return undefined;
@@ -86,4 +92,22 @@ export async function listProductRequests() {
 export async function listAnalyticsEvents() {
   const db = await getDb(); if (!db) return [];
   return db.select().from(analyticsEvents).orderBy(desc(analyticsEvents.createdAt)).limit(500);
+}
+
+export async function listComboKits() {
+  const db = await getDb(); if (!db) return [];
+  const kits = await db.select().from(comboKits).where(eq(comboKits.hidden, 0)).orderBy(desc(comboKits.createdAt));
+  return Promise.all(kits.map(async (kit) => ({ ...kit, items: await db.select().from(comboKitItems).where(eq(comboKitItems.comboKitId, kit.id)) })));
+}
+
+export async function createComboKit(input: { slug: string; name: string; tagline?: string; description?: string; price: number; featured?: number; items: Array<{ productSlug: string; quantity: number }> }) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  await db.insert(comboKits).values({ slug: input.slug, name: input.name, tagline: input.tagline, description: input.description, price: input.price, featured: input.featured ?? 0 });
+  const created = await db.select().from(comboKits).where(eq(comboKits.slug, input.slug)).limit(1);
+  if (created[0] && input.items.length) await db.insert(comboKitItems).values(input.items.map((item) => ({ comboKitId: created[0].id, productSlug: item.productSlug, quantity: item.quantity })));
+}
+
+export async function hideComboKit(id: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.update(comboKits).set({ hidden: 1 }).where(eq(comboKits.id, id));
 }

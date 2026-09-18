@@ -2,7 +2,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
-import { createCatalogProduct, deleteCatalogProduct, getCatalogProduct, getSiteSettings, listAnalyticsEvents, listCatalogProducts, listProductRequests, listProjectRequests, recordAnalyticsEvent, saveProductRequest, saveProjectRequest, saveSiteSettings } from "./db";
+import { createCatalogProduct, createComboKit, deleteCatalogProduct, getCatalogProduct, getSiteSettings, hideComboKit, listAnalyticsEvents, listCatalogProducts, listComboKits, listProductRequests, listProjectRequests, recordAnalyticsEvent, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts } from "./db";
 
 const productInput = z.object({
   slug: z.string().min(1).max(180), name: z.string().min(1).max(180), sku: z.string().max(80).optional(), price: z.number().int().nonnegative(), shortDescription: z.string().optional(), description: z.string().optional(), category: z.string().max(80).optional(), tags: z.string().optional(), specs: z.string().optional(), imageUrl: z.string().optional(), featured: z.number().int().min(0).max(1).optional(),
@@ -16,7 +16,9 @@ export const appRouter = router({
   }),
   catalog: router({
     list: publicProcedure.query(() => listCatalogProducts()),
+    search: publicProcedure.input(z.object({ query: z.string().max(180) })).query(({ input }) => input.query.trim() ? searchCatalogProducts(input.query) : listCatalogProducts()),
     get: publicProcedure.input(z.object({ slug: z.string() })).query(({ input }) => getCatalogProduct(input.slug)),
+    comboKits: publicProcedure.query(() => listComboKits()),
     settings: publicProcedure.query(() => getSiteSettings()),
   }),
   analytics: router({
@@ -31,6 +33,11 @@ export const appRouter = router({
       list: adminProcedure.query(() => listCatalogProducts()),
       create: adminProcedure.input(productInput).mutation(({ input }) => createCatalogProduct(input).then(() => ({ success: true }))),
       hide: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteCatalogProduct(input.id).then(() => ({ success: true }))),
+    }),
+    comboKits: router({
+      list: adminProcedure.query(() => listComboKits()),
+      create: adminProcedure.input(z.object({ slug: z.string().min(1).max(180), name: z.string().min(1).max(180), tagline: z.string().optional(), description: z.string().optional(), price: z.number().int().nonnegative(), featured: z.number().int().min(0).max(1).optional(), items: z.array(z.object({ productSlug: z.string().min(1), quantity: z.number().int().positive() })).min(1) })).mutation(({ input }) => createComboKit(input).then(() => ({ success: true }))),
+      hide: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => hideComboKit(input.id).then(() => ({ success: true }))),
     }),
     requests: router({
       list: adminProcedure.query(async () => ({ projects: await listProjectRequests(), products: await listProductRequests() })),

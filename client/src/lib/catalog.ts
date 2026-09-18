@@ -16,6 +16,17 @@ export type Product = {
 
 export type CartItem = Product & { quantity: number };
 
+export type ComboKit = {
+  id: number;
+  slug: string;
+  name: string;
+  tagline: string;
+  description: string;
+  price: number;
+  featured: boolean;
+  items: { productSlug: string; quantity: number }[];
+};
+
 export const heroImage = "/manus-storage/haidronics-circuit-hero_4fdc732d.jpg";
 export const logoImage = "/manus-storage/haidronics-logo_51ad85ad.png";
 export const logoIconImage = "/manus-storage/haidronics-icon_0c53ca1d.png";
@@ -181,6 +192,39 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
       specs,
     };
   });
+}
+
+export function normalizeApiComboKits(rows: Array<Record<string, unknown>> | undefined) {
+  if (!rows?.length) return [];
+  return rows.map((row): ComboKit => ({
+    id: Number(row.id || 0),
+    slug: String(row.slug || "combo-kit"),
+    name: String(row.name || "Combo kit"),
+    tagline: String(row.tagline || "A practical starting bundle."),
+    description: String(row.description || "A curated set of parts for a focused build."),
+    price: Number(row.price || 0),
+    featured: Number(row.featured || 0) === 1,
+    items: Array.isArray(row.items) ? row.items.map((item) => {
+      const value = item as Record<string, unknown>;
+      return { productSlug: String(value.productSlug || ""), quantity: Number(value.quantity || 1) };
+    }) : [],
+  }));
+}
+
+export function recommendedProducts(product: Product, source: Product[]) {
+  return source
+    .filter((candidate) => candidate.id !== product.id)
+    .map((candidate) => ({ candidate, score: (candidate.category === product.category ? 3 : 0) + candidate.tags.filter((tag) => product.tags.includes(tag)).length }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ candidate }) => candidate);
+}
+
+export function mergeProductSources(primary: Product[], fallback: Product[]) {
+  const merged = new Map<string, Product>();
+  primary.forEach((product) => merged.set(product.id, product));
+  fallback.forEach((product) => { if (!merged.has(product.id)) merged.set(product.id, product); });
+  return Array.from(merged.values());
 }
 
 export const categories = ["All", "Development boards", "Sensors", "Displays", "Modules"];
