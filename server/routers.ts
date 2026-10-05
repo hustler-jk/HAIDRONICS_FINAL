@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createCatalogProduct, createComboKit, createCustomerStory, createServerPricedOrder, deleteCatalogProduct, getCatalogProduct, getCommerceMetrics, getOrderForUser, getSiteSettings, hideComboKit, hideCustomerStory, listAdminOrders, listAnalyticsEvents, listAuditLogs, listCatalogProducts, listComboKits, listCustomerStories, listInventoryMovements, listOrdersForUser, listProductRequests, listProjectRequests, listRequestsForUser, listTransactions, recordAnalyticsEvent, rejectOrderPayment, restockProduct, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, transitionOrderStatus, updateCatalogProduct, verifyOrderPayment } from "./db";
+import { createCatalogProduct, createComboKit, createCustomerStory, createServerPricedOrder, deleteCatalogProduct, generateOrderInvoice, getCatalogProduct, getCommerceMetrics, getOrderForUser, getSiteSettings, getUserByEmail, hideComboKit, hideCustomerStory, listAdminOrders, listAnalyticsEvents, listAuditLogs, listCatalogProducts, listComboKits, listCustomerStories, listInventoryMovements, listOrdersForUser, listProductRequests, listProjectRequests, listRequestsForUser, listTransactions, overrideOrderAmount, recordAnalyticsEvent, rejectOrderPayment, restockProduct, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, transitionOrderStatus, updateCatalogProduct, updateUserProfile, upsertUser, verifyOrderPayment } from "./db";
 import { storagePut } from "./storage";
 
 const productInput = z.object({
@@ -13,6 +14,48 @@ export const appRouter = router({
   system: router({}),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    register: publicProcedure
+      .input(z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().min(6), phone: z.string().optional(), address: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const existing = await getUserByEmail(input.email);
+        if (existing) throw new Error("An account with this email already exists");
+        const openId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await upsertUser({
+          openId,
+          name: input.name,
+          email: input.email.toLowerCase(),
+          password: input.password,
+          phone: input.phone || null,
+          address: input.address || null,
+          loginMethod: "password",
+          role: "user",
+          lastSignedIn: new Date(),
+        });
+        const sessionToken = await sdk.createSessionToken(openId, { name: input.name, expiresInMs: ONE_YEAR_MS });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true };
+      }),
+    login: publicProcedure
+      .input(z.object({ email: z.string().email(), password: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserByEmail(input.email);
+        if (!user) throw new Error("No account found with this email");
+        if (user.password && user.password !== input.password) {
+          throw new Error("Invalid password");
+        }
+        await upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "User", expiresInMs: ONE_YEAR_MS });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true, role: user.role };
+      }),
+    updateProfile: protectedProcedure
+      .input(z.object({ name: z.string().min(2).optional(), phone: z.string().optional(), address: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        await updateUserProfile(ctx.user.id, input);
+        return { success: true };
+      }),
     logout: publicProcedure.mutation(({ ctx }) => { const cookieOptions = getSessionCookieOptions(ctx.req); ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 }); return { success: true } as const; }),
   }),
   catalog: router({
@@ -69,6 +112,8 @@ export const appRouter = router({
       transition: adminProcedure.input(z.object({ id: z.number().int().positive(), status: z.enum(["PAYMENT_PENDING", "ORDER_CONFIRMED", "PACKED", "SHIPPED", "DELIVERED", "CANCELLED"]) })).mutation(({ input, ctx }) => transitionOrderStatus(input.id, input.status, ctx.user.id)),
       verifyPayment: adminProcedure.input(z.object({ id: z.number().int().positive(), reference: z.string().max(160).optional() })).mutation(({ input, ctx }) => verifyOrderPayment(input.id, ctx.user.id, input.reference)),
       rejectPayment: adminProcedure.input(z.object({ id: z.number().int().positive(), note: z.string().max(500).optional() })).mutation(({ input, ctx }) => rejectOrderPayment(input.id, ctx.user.id, input.note)),
+      overrideAmount: adminProcedure.input(z.object({ id: z.number().int().positive(), finalAmount: z.number().int().nonnegative(), reason: z.string().max(500).optional() })).mutation(({ input, ctx }) => overrideOrderAmount(input.id, input.finalAmount, ctx.user.id, input.reason)),
+      generateInvoice: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => generateOrderInvoice(input.id, ctx.user.id)),
     }),
     inventory: router({
       movements: adminProcedure.query(() => listInventoryMovements()),

@@ -1,22 +1,265 @@
 import { FormEvent, useState } from "react";
-import { ArrowLeft, Check, Loader2, MessageCircle, Minus, Plus, ShoppingBag, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Loader2, MessageCircle, Minus, Plus, ShieldCheck, ShoppingBag, Trash2, UserRound } from "lucide-react";
 import { Link } from "wouter";
 import { useBusinessSettings, useCart } from "@/components/SiteShell";
 import { cartMessage, formatINR, whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
   const settings = useBusinessSettings();
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [showCheckout, setShowCheckout] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [orderNumber, setOrderNumber] = useState<string | null>(null);
-  const createOrder = trpc.checkout.create.useMutation({ onSuccess: () => setSubmitted(true) });
+  const [orderResult, setOrderResult] = useState<{ orderNumber: string; total: number; subtotal: number; shipping: number } | null>(null);
+
+  const createOrder = trpc.checkout.create.useMutation({
+    onSuccess: (result) => {
+      setOrderResult(result);
+      setSubmitted(true);
+      toast.success(`Order ${result.orderNumber} created successfully!`);
+      const fullMessage = cartMessage(cart.items, customer, result.orderNumber);
+      const url = whatsappLink(fullMessage, settings.whatsappNumber);
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to submit order request");
+    },
+  });
+
   const submitCheckout = (event: FormEvent) => {
     event.preventDefault();
-    const message = cartMessage(cart.items, customer);
-    createOrder.mutate({ customerName: customer.name, phone: customer.phone, address: customer.address, items: cart.items.map((item) => ({ slug: item.id, quantity: item.quantity })) }, { onSuccess: (result) => { setOrderNumber(result.orderNumber); setSubmitted(true); window.open(whatsappLink(`${message}\n\nOrder reference: ${result.orderNumber}\nServer-calculated total: ${formatINR(result.total)}`, settings.whatsappNumber), "_blank", "noopener,noreferrer"); } });
+    if (!customer.name.trim() || !customer.phone.trim() || !customer.address.trim()) {
+      toast.error("Please fill in your name, phone, and delivery address.");
+      return;
+    }
+
+    createOrder.mutate({
+      customerName: customer.name,
+      phone: customer.phone,
+      address: customer.address,
+      items: cart.items.map((item) => ({ slug: item.id, quantity: item.quantity })),
+    });
   };
-  return <div className="container min-h-[70vh] py-12 md:py-20"><Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40 hover:text-orange-300"><ArrowLeft size={14} /> Continue browsing</Link><div className="mt-10 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 md:flex-row md:items-end"><div><p className="eyebrow text-orange-300">Selection / WhatsApp checkout</p><h1 className="mt-3 font-display text-5xl tracking-[-0.05em] text-white md:text-7xl">Your cart<span className="text-white/25">.</span></h1></div><p className="max-w-xs text-sm leading-6 text-white/45">WhatsApp stays in the flow, while HAIDRONICS creates a server-priced order reference for admin follow-up.</p></div>{cart.items.length === 0 ? <div className="flex flex-col items-center border-b border-white/10 py-24 text-center"><ShoppingBag className="text-white/25" size={34} /><h2 className="mt-5 font-display text-2xl text-white">Nothing here yet.</h2><p className="mt-3 max-w-sm text-sm leading-6 text-white/45">Add a few components from the catalog, then send one clear enquiry.</p><Link href="/products" className="mt-7 inline-flex items-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black">Browse products</Link></div> : <div className="grid gap-12 pt-10 lg:grid-cols-[1fr_0.42fr]"><div className="space-y-3">{cart.items.map((item) => <div key={item.id} className="flex flex-col gap-4 border-b border-white/[0.08] py-5 sm:flex-row sm:items-center"><div className="product-mini-art" data-variant={item.image}>{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-cover opacity-80" /> : <span>{item.image === "board" ? "ESP32" : item.image.toUpperCase()}</span>}</div><div className="min-w-0 flex-1"><p className="font-display text-xl text-white">{item.name}</p><p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">{item.sku}</p></div><p className="font-mono text-sm text-orange-300 sm:w-24">{formatINR(item.price * item.quantity)}</p><div className="flex items-center gap-3"><button type="button" className="quantity-button" onClick={() => cart.changeQuantity(item.id, item.quantity - 1)}><Minus size={13} /></button><span className="font-mono text-xs text-white/70">{item.quantity}</span><button type="button" className="quantity-button" onClick={() => cart.changeQuantity(item.id, item.quantity + 1)}><Plus size={13} /></button><button type="button" className="ml-3 text-white/30 hover:text-red-300" aria-label={`Remove ${item.name}`} onClick={() => cart.remove(item.id)}><Trash2 size={15} /></button></div></div>)}</div><aside className="h-fit border border-orange-400/25 bg-[#111416] p-6"><p className="eyebrow text-orange-300">WhatsApp + order ledger</p><div className="mt-6 flex items-center justify-between border-b border-white/10 pb-5 font-mono text-[10px] uppercase tracking-[0.14em] text-white/45"><span>Store estimate</span><strong className="font-mono text-2xl text-white">{formatINR(cart.total)}</strong></div><p className="mt-5 text-sm leading-6 text-white/45">The backend rechecks product prices and applies the current ₹50 default shipping fee when the order request is created.</p>{submitted ? <div className="mt-6 border border-emerald-400/25 bg-emerald-500/10 p-4"><p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.13em] text-emerald-300"><Check size={14} /> Order request saved</p><p className="mt-2 font-mono text-sm text-white">{orderNumber || "HAIDRONICS order"}</p><p className="mt-2 text-sm leading-6 text-white/55">WhatsApp should be open. Admin can now review the request and update payment/order status.</p><a href={whatsappLink(cartMessage(cart.items, customer), settings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.13em] text-orange-300">Open WhatsApp again <MessageCircle size={13} /></a></div> : !showCheckout ? <button type="button" onClick={() => setShowCheckout(true)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><UserRound size={15} /> Continue with details</button> : <form onSubmit={submitCheckout} className="mt-6 grid gap-3"><CheckoutField label="Full name" value={customer.name} onChange={(value) => setCustomer({ ...customer, name: value })} required /><CheckoutField label="Phone / WhatsApp number" value={customer.phone} onChange={(value) => setCustomer({ ...customer, phone: value })} required /><label><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-white/40">Delivery address</span><textarea required minLength={8} value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })} className="min-h-24 w-full resize-y rounded-sm border border-white/15 bg-[#0b0e0f] px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" /></label><button type="submit" disabled={createOrder.isPending} className="mt-2 flex items-center justify-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black disabled:opacity-50">{createOrder.isPending ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} Save order & open WhatsApp</button></form>}<button type="button" onClick={cart.clear} className="mt-4 flex w-full items-center justify-center gap-2 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white"><Check size={13} /> Clear selection</button></aside></div>}</div>;
+
+  const shippingFee = 50;
+  const estimatedTotal = cart.total + shippingFee;
+
+  return (
+    <div className="container min-h-[75vh] py-12 md:py-20">
+      <Link href="/products" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40 hover:text-orange-300">
+        <ArrowLeft size={14} /> Continue browsing
+      </Link>
+
+      <div className="mt-8 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 md:flex-row md:items-end">
+        <div>
+          <p className="eyebrow text-orange-300">Selection / WhatsApp order flow</p>
+          <h1 className="mt-3 font-display text-5xl tracking-[-0.05em] text-white md:text-7xl">
+            Your cart<span className="text-white/25">.</span>
+          </h1>
+        </div>
+        <p className="max-w-sm text-sm leading-6 text-white/45">
+          Order requests are registered in the HAIDRONICS system and redirected to WhatsApp for payment verification and dispatch.
+        </p>
+      </div>
+
+      {cart.items.length === 0 ? (
+        <div className="flex flex-col items-center border-b border-white/10 py-24 text-center">
+          <ShoppingBag className="text-white/25" size={40} />
+          <h2 className="mt-5 font-display text-2xl text-white">Your cart is empty.</h2>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-white/45">
+            Explore our development boards, sensors, displays, and robotics modules.
+          </p>
+          <Link href="/products" className="mt-7 inline-flex items-center gap-2 rounded-md bg-[#ff6417] px-6 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400">
+            Browse catalog <ArrowUpRight size={14} />
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-12 pt-10 lg:grid-cols-[1fr_0.45fr]">
+          {/* Cart Items List */}
+          <div className="space-y-4">
+            {cart.items.map((item) => (
+              <div key={item.id} className="flex flex-col gap-4 rounded-lg border border-white/[0.08] bg-[#0d1012] p-4 sm:flex-row sm:items-center sm:p-5">
+                <div className="product-mini-art" data-variant={item.image}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span>{item.image === "board" ? "ESP32" : item.image.toUpperCase()}</span>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <Link href={`/products/${item.id}`} className="font-display text-lg text-white hover:text-orange-300">
+                    {item.name}
+                  </Link>
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+                    {item.sku} · {formatINR(item.price)} each
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-6 sm:justify-end">
+                  {/* Quantity Stepper */}
+                  <div className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-2 py-1">
+                    <button
+                      type="button"
+                      className="text-white/50 hover:text-white"
+                      onClick={() => cart.changeQuantity(item.id, item.quantity - 1)}
+                      aria-label="Decrease"
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span className="min-w-6 text-center font-mono text-xs text-white">{item.quantity}</span>
+                    <button
+                      type="button"
+                      className="text-white/50 hover:text-white"
+                      onClick={() => cart.changeQuantity(item.id, item.quantity + 1)}
+                      aria-label="Increase"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+
+                  <p className="min-w-24 text-right font-mono text-base font-semibold text-orange-300">
+                    {formatINR(item.price * item.quantity)}
+                  </p>
+
+                  <button
+                    type="button"
+                    className="text-white/30 hover:text-red-400 transition-colors"
+                    aria-label={`Remove ${item.name}`}
+                    onClick={() => cart.remove(item.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-between pt-2">
+              <button
+                type="button"
+                onClick={cart.clear}
+                className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-white"
+              >
+                Clear entire cart
+              </button>
+            </div>
+          </div>
+
+          {/* Checkout / Order Summary Box */}
+          <aside className="h-fit rounded-xl border border-orange-400/30 bg-[#121518] p-6 shadow-2xl">
+            <p className="eyebrow text-orange-300">Order Summary</p>
+
+            <div className="mt-6 space-y-3 border-b border-white/10 pb-5 text-sm">
+              <div className="flex justify-between text-white/60">
+                <span>Items Subtotal</span>
+                <span className="font-mono text-white">{formatINR(cart.total)}</span>
+              </div>
+              <div className="flex justify-between text-white/60">
+                <span>Standard Shipping</span>
+                <span className="font-mono text-white">{formatINR(shippingFee)}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-white/10 font-mono text-base font-bold text-white">
+                <span>Estimated Total</span>
+                <span className="text-orange-300 text-xl">{formatINR(estimatedTotal)}</span>
+              </div>
+            </div>
+
+            {submitted && orderResult ? (
+              <div className="mt-6 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5">
+                <div className="flex items-center gap-2 text-emerald-400 font-mono text-xs uppercase tracking-wider font-semibold">
+                  <CheckCircle2 size={18} /> Order Reference Created
+                </div>
+                <p className="mt-3 font-mono text-xl font-bold text-white tracking-wide">
+                  {orderResult.orderNumber}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-white/70">
+                  Your order request has been logged in HAIDRONICS. Click below to continue on WhatsApp and confirm with the engineering team.
+                </p>
+
+                <a
+                  href={whatsappLink(cartMessage(cart.items, customer, orderResult.orderNumber), settings.whatsappNumber)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-black hover:bg-emerald-400 transition-colors"
+                >
+                  <MessageCircle size={16} /> Open WhatsApp Chat Now
+                </a>
+              </div>
+            ) : !showCheckout ? (
+              <div className="mt-6 space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCheckout(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 transition-colors"
+                >
+                  <UserRound size={15} /> Proceed to checkout
+                </button>
+                <p className="text-center font-mono text-[9px] uppercase tracking-[0.12em] text-white/35 flex items-center justify-center gap-1.5">
+                  <ShieldCheck size={12} className="text-orange-400" /> WhatsApp Hand-off with Order Ledger
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={submitCheckout} className="mt-6 space-y-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-300">
+                  Enter delivery details
+                </p>
+
+                <label className="block">
+                  <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-white/50">Full Name *</span>
+                  <input
+                    required
+                    placeholder="e.g. Rahul Sharma"
+                    value={customer.name}
+                    onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                    className="h-11 w-full rounded-md border border-white/15 bg-[#0a0c0e] px-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-400"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-white/50">WhatsApp / Phone Number *</span>
+                  <input
+                    required
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={customer.phone}
+                    onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                    className="h-11 w-full rounded-md border border-white/15 bg-[#0a0c0e] px-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-400"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-white/50">Delivery Address *</span>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="House/Building, Street, City, State, PIN code"
+                    value={customer.address}
+                    onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
+                    className="w-full resize-y rounded-md border border-white/15 bg-[#0a0c0e] p-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-400"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={createOrder.isPending}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 disabled:opacity-50 transition-colors"
+                >
+                  {createOrder.isPending ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Creating Order Reference...
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle size={16} /> Place Order & Open WhatsApp
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </aside>
+        </div>
+      )}
+    </div>
+  );
 }
-function CheckoutField({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) { return <label><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-white/40">{label}</span><input required={required} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full rounded-sm border border-white/15 bg-[#0b0e0f] px-3 text-sm text-white outline-none focus:border-orange-400" /></label>; }

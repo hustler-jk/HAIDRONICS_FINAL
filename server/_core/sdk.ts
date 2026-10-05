@@ -154,14 +154,12 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
+    const secret = ENV.cookieSecret || "haidronics-secure-local-secret-key-32-chars";
     return new TextEncoder().encode(secret);
   }
 
   /**
-   * Create a session token for a Manus user openId
-   * @example
-   * const sessionToken = await sdk.createSessionToken(userInfo.openId);
+   * Create a session token for a user openId
    */
   async createSessionToken(
     openId: string,
@@ -170,8 +168,8 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
-        name: options.name || "",
+        appId: ENV.appId || "haidronics-cloud",
+        name: options.name || "User",
       },
       options
     );

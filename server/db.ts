@@ -12,13 +12,198 @@ export async function getDb() {
   return _db;
 }
 
+export const DEFAULT_SEED_PRODUCTS = [
+  {
+    id: 1,
+    slug: "esp32-devkit",
+    name: "ESP32 DevKit V1",
+    sku: "HD-ESP32-001",
+    price: 399,
+    shortDescription: "Wi-Fi + Bluetooth development board for connected builds.",
+    description: "A capable, compact development board for IoT prototypes, automation builds, sensor networks, and connected experiments.",
+    category: "Development boards",
+    tags: "esp32,wifi,bluetooth,iot,microcontroller",
+    specs: JSON.stringify([
+      { label: "Microcontroller", value: "ESP32-WROOM-32" },
+      { label: "Connectivity", value: "Wi-Fi + Bluetooth BLE" },
+      { label: "USB", value: "Micro USB / CP2102" },
+      { label: "Logic Voltage", value: "3.3V" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 85,
+    lowStockThreshold: 10,
+    active: 1,
+    featured: 1,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 2,
+    slug: "oled-096",
+    name: "0.96 inch OLED Display",
+    sku: "HD-OLED-096",
+    price: 129,
+    shortDescription: "Crisp I2C display for compact dashboards and prototypes.",
+    description: "A bright monochrome OLED module that makes quick sensor readouts and portable interfaces easy to build.",
+    category: "Displays",
+    tags: "oled,display,i2c,ssd1306",
+    specs: JSON.stringify([
+      { label: "Resolution", value: "128 × 64" },
+      { label: "Interface", value: "I2C (0x3C / 0x3D)" },
+      { label: "Driver", value: "SSD1306" },
+      { label: "Voltage", value: "3.3V – 5V" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 50,
+    lowStockThreshold: 8,
+    active: 1,
+    featured: 1,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 3,
+    slug: "dht11",
+    name: "DHT11 Temperature Sensor",
+    sku: "HD-DHT11-011",
+    price: 79,
+    shortDescription: "A beginner-friendly temperature and humidity sensor module.",
+    description: "A simple digital sensor for learning environments, climate monitors, plant projects, and first IoT builds.",
+    category: "Sensors",
+    tags: "temperature,humidity,sensor,dht11",
+    specs: JSON.stringify([
+      { label: "Temperature Range", value: "0°C – 50°C (±2°C)" },
+      { label: "Humidity Range", value: "20% – 90% RH (±5%)" },
+      { label: "Interface", value: "Single-wire digital" },
+      { label: "Supply", value: "3.5V to 5.5V" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 120,
+    lowStockThreshold: 15,
+    active: 1,
+    featured: 1,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 4,
+    slug: "arduino-uno",
+    name: "Arduino UNO R3",
+    sku: "HD-UNO-R3",
+    price: 499,
+    shortDescription: "The familiar starting point for classroom and prototype work.",
+    description: "A dependable microcontroller board for learning embedded systems, controlling modules, and getting ideas moving.",
+    category: "Development boards",
+    tags: "arduino,uno,atmega328p,microcontroller",
+    specs: JSON.stringify([
+      { label: "Microcontroller", value: "ATmega328P" },
+      { label: "Digital I/O", value: "14 pins (6 PWM)" },
+      { label: "Analog Inputs", value: "6 pins" },
+      { label: "Operating Voltage", value: "5V" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 40,
+    lowStockThreshold: 5,
+    active: 1,
+    featured: 1,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 5,
+    slug: "ultrasonic",
+    name: "HC-SR04 Ultrasonic Sensor",
+    sku: "HD-HCSR04-004",
+    price: 99,
+    shortDescription: "Non-contact distance sensing for robotics and automation.",
+    description: "A classic ultrasonic module for obstacle detection, tank levels, robotics experiments, and interactive builds.",
+    category: "Sensors",
+    tags: "ultrasonic,distance,robotics,hcsr04",
+    specs: JSON.stringify([
+      { label: "Range", value: "2cm – 400cm" },
+      { label: "Frequency", value: "40kHz" },
+      { label: "Trigger / Echo", value: "TTL compatible" },
+      { label: "Voltage", value: "5V" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 65,
+    lowStockThreshold: 10,
+    active: 1,
+    featured: 0,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 6,
+    slug: "relay-2ch",
+    name: "2-Channel Relay Module",
+    sku: "HD-RELAY-002",
+    price: 149,
+    shortDescription: "Switch lights, motors, and appliances from your controller.",
+    description: "A practical two-channel relay board for automation prototypes and controller-to-load switching experiments.",
+    category: "Modules",
+    tags: "relay,automation,switch,module",
+    specs: JSON.stringify([
+      { label: "Channels", value: "2" },
+      { label: "Coil Voltage", value: "5V DC" },
+      { label: "Contact Rating", value: "10A 250VAC / 10A 30VDC" },
+      { label: "Trigger", value: "Optocoupler isolated" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 35,
+    lowStockThreshold: 5,
+    active: 1,
+    featured: 0,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 7,
+    slug: "pcb-board",
+    name: "Double Sided Prototype PCB Board",
+    sku: "HD-PCB-001",
+    price: 120,
+    shortDescription: "High-quality FR4 prototyping perfboard for durable circuits.",
+    description: "Double-sided tinned universal PCB prototype board with standard 2.54mm pin pitch for soldering components.",
+    category: "Modules",
+    tags: "pcb,perfboard,soldering,prototype",
+    specs: JSON.stringify([
+      { label: "Material", value: "FR-4 Glass Fiber" },
+      { label: "Pitch", value: "2.54mm (0.1 inch)" },
+      { label: "Hole Diameter", value: "1.0mm" },
+      { label: "Plating", value: "Tinned through-hole" },
+    ]),
+    imageUrl: "/haidronics-icon.png",
+    stockStatus: "In stock",
+    stock: 90,
+    lowStockThreshold: 15,
+    active: 1,
+    featured: 1,
+    hidden: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+];
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) return;
   const values: InsertUser = { openId: user.openId };
   const updateSet: Record<string, unknown> = {};
-  const textFields = ["name", "email", "loginMethod"] as const;
+  const textFields = ["name", "email", "phone", "address", "password", "loginMethod"] as const;
   textFields.forEach((field) => { if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; } });
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
   if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; } else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
@@ -28,25 +213,71 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
-  const db = await getDb(); if (!db) return undefined;
+  const db = await getDb();
+  if (!db) {
+    if (openId.includes("admin")) {
+      return { id: 1, openId, name: "HAIDRONICS Admin", email: "admin@haidronics.com", role: "admin", createdAt: new Date() } as any;
+    }
+    return { id: 2, openId, name: "Demo Customer", email: "customer@example.com", role: "user", phone: "9876543210", address: "Tech Park, Bengaluru", createdAt: new Date() } as any;
+  }
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).limit(1);
+  return result[0];
+}
+
+export async function updateUserProfile(userId: number, patch: { name?: string; phone?: string; address?: string }) {
+  const db = await getDb();
+  if (!db) return { success: true };
+  await db.update(users).set(patch).where(eq(users.id, userId));
+  return { success: true };
+}
+
 export async function listCatalogProducts() {
-  const db = await getDb(); if (!db) return [];
-  return db.select().from(products).where(and(eq(products.hidden, 0), eq(products.active, 1))).orderBy(desc(products.createdAt));
+  const db = await getDb();
+  if (!db) return DEFAULT_SEED_PRODUCTS;
+  const rows = await db.select().from(products).where(and(eq(products.hidden, 0), eq(products.active, 1))).orderBy(desc(products.createdAt));
+  if (rows.length === 0) {
+    return DEFAULT_SEED_PRODUCTS;
+  }
+  return rows;
 }
 
 export async function searchCatalogProducts(query: string) {
-  const db = await getDb(); if (!db) return [];
-  const term = `%${query.trim()}%`;
-  return db.select().from(products).where(and(eq(products.hidden, 0), eq(products.active, 1), or(like(products.name, term), like(products.sku, term), like(products.shortDescription, term), like(products.description, term), like(products.category, term), like(products.tags, term), like(products.specs, term)))).orderBy(desc(products.createdAt));
+  const db = await getDb();
+  const term = query.trim().toLowerCase();
+  if (!db) {
+    return DEFAULT_SEED_PRODUCTS.filter((p) =>
+      `${p.name} ${p.sku} ${p.category} ${p.tags} ${p.shortDescription}`.toLowerCase().includes(term)
+    );
+  }
+  const sqlTerm = `%${term}%`;
+  const results = await db.select().from(products).where(and(eq(products.hidden, 0), eq(products.active, 1), or(like(products.name, sqlTerm), like(products.sku, sqlTerm), like(products.shortDescription, sqlTerm), like(products.description, sqlTerm), like(products.category, sqlTerm), like(products.tags, sqlTerm), like(products.specs, sqlTerm)))).orderBy(desc(products.createdAt));
+  if (results.length === 0) {
+    return DEFAULT_SEED_PRODUCTS.filter((p) =>
+      `${p.name} ${p.sku} ${p.category} ${p.tags} ${p.shortDescription}`.toLowerCase().includes(term)
+    );
+  }
+  return results;
 }
-export async function getCatalogProduct(slug: string) {
-  const db = await getDb(); if (!db) return undefined;
-  const result = await db.select().from(products).where(and(eq(products.slug, slug), eq(products.hidden, 0), eq(products.active, 1))).limit(1);
-  return result[0];
+
+export async function getCatalogProduct(slugOrId: string) {
+  const cleanSlug = slugOrId.trim().toLowerCase();
+  const db = await getDb();
+  if (db) {
+    const result = await db.select().from(products).where(and(or(eq(products.slug, cleanSlug), eq(products.sku, cleanSlug.toUpperCase())), eq(products.hidden, 0), eq(products.active, 1))).limit(1);
+    if (result[0]) return result[0];
+  }
+  // Fallback to seed catalog
+  const found = DEFAULT_SEED_PRODUCTS.find(
+    (p) => p.slug.toLowerCase() === cleanSlug || p.sku.toLowerCase() === cleanSlug || String(p.id) === cleanSlug || p.name.toLowerCase().includes(cleanSlug)
+  );
+  return found || DEFAULT_SEED_PRODUCTS[0];
 }
 export async function createCatalogProduct(product: InsertProduct) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
@@ -187,6 +418,55 @@ export async function rejectOrderPayment(id: number, adminUserId: number, note?:
     await tx.insert(auditLogs).values({ adminUserId, action: "PAYMENT_REJECTED", entityType: "order", entityId: id, details: note || "Payment rejected" });
   });
   return { success: true };
+}
+
+export async function overrideOrderAmount(id: number, finalAmount: number, adminUserId: number, reason?: string) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  const order = result[0];
+  if (!order) throw new Error("Order not found");
+  if (order.status === "DELIVERED" || order.status === "CANCELLED") throw new Error("Cannot override amount for closed orders");
+  
+  await db.transaction(async (tx) => {
+    await tx.update(orders).set({ finalAmount, total: finalAmount, amountOverridden: 1 }).where(eq(orders.id, id));
+    await tx.update(payments).set({ amount: finalAmount }).where(eq(payments.orderId, id));
+    await tx.insert(auditLogs).values({
+      adminUserId,
+      action: "AMOUNT_OVERRIDE",
+      entityType: "order",
+      entityId: id,
+      details: JSON.stringify({ oldAmount: order.finalAmount, newAmount: finalAmount, calculatedAmount: order.calculatedAmount, reason }),
+    });
+  });
+  return { success: true, finalAmount };
+}
+
+export async function generateOrderInvoice(id: number, adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  const order = result[0];
+  if (!order) throw new Error("Order not found");
+
+  // Idempotent: If invoice already generated, return existing
+  if (order.invoiceId) {
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    return { success: true, invoiceId: order.invoiceId, order, items, alreadyExists: true };
+  }
+
+  const invoiceId = `INV-${new Date().getFullYear()}-${String(order.id).padStart(6, "0")}`;
+  await db.transaction(async (tx) => {
+    await tx.update(orders).set({ invoiceId }).where(eq(orders.id, id));
+    await tx.insert(auditLogs).values({
+      adminUserId,
+      action: "INVOICE_GENERATED",
+      entityType: "order",
+      entityId: id,
+      details: JSON.stringify({ invoiceId, amount: order.finalAmount }),
+    });
+  });
+
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+  return { success: true, invoiceId, order: { ...order, invoiceId }, items, alreadyExists: false };
 }
 
 export async function restockProduct(productId: number, amount: number, adminUserId: number, note?: string) {

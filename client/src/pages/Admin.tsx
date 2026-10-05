@@ -1,16 +1,113 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Boxes, ChevronRight, CirclePlus, ClipboardList, Eye, FileBarChart, Images, Layers3, LayoutDashboard, Loader2, LogIn, MessageCircle, Package, ReceiptText, ScrollText, Search, Settings2, Trash2, Users, X } from "lucide-react";
+import {
+  AlertCircle,
+  BarChart3,
+  Boxes,
+  CheckCircle2,
+  ChevronRight,
+  CirclePlus,
+  ClipboardList,
+  Download,
+  Edit2,
+  Eye,
+  FileBarChart,
+  FileText,
+  Images,
+  Layers3,
+  LayoutDashboard,
+  Loader2,
+  LogIn,
+  MessageCircle,
+  Package,
+  Printer,
+  ReceiptText,
+  RefreshCw,
+  ScrollText,
+  Search,
+  Settings2,
+  Trash2,
+  TrendingUp,
+  UploadCloud,
+  Users,
+  X,
+} from "lucide-react";
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ComboKit, logoIconImage, normalizeApiComboKits, normalizeApiProducts, products as seedProducts, Product, formatINR } from "@/lib/catalog";
+import {
+  ComboKit,
+  formatINR,
+  logoIconImage,
+  normalizeApiComboKits,
+  normalizeApiProducts,
+  Product,
+  products as seedProducts,
+  whatsappLink,
+} from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
-const nav = [["dashboard", "Dashboard", LayoutDashboard], ["orders", "Orders", ClipboardList], ["inventory", "Inventory", Boxes], ["products", "Products", Package], ["comboKits", "Combo kits", Layers3], ["customerStories", "Customer proof", Images], ["transactions", "Transactions", ReceiptText], ["reports", "Reports", FileBarChart], ["audit", "Audit logs", ScrollText], ["requests", "Requests", MessageCircle], ["analytics", "Analytics", BarChart3], ["settings", "Settings", Settings2]] as const;
+const nav = [
+  ["dashboard", "Dashboard", LayoutDashboard],
+  ["orders", "Orders", ClipboardList],
+  ["inventory", "Inventory", Boxes],
+  ["products", "Products", Package],
+  ["comboKits", "Combo Kits", Layers3],
+  ["customerStories", "Customer Proof", Images],
+  ["transactions", "Transactions", ReceiptText],
+  ["reports", "Reports & Export", FileBarChart],
+  ["audit", "Audit Logs", ScrollText],
+  ["requests", "Requests", MessageCircle],
+  ["analytics", "Analytics", BarChart3],
+  ["settings", "Settings", Settings2],
+] as const;
 
-type SettingsForm = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string; youtubeUrl: string; shippingFee: number };
-type CustomerStoryDraft = { title: string; customerName: string; projectType: string; caption: string; imageUrl?: string; image?: { filename: string; contentType: string; base64: string } | null };
-type CustomerStoryAdmin = { id: number; title: string; customerName?: string | null; projectType?: string | null; caption?: string | null; imageUrl?: string | null };
-type ProductDraft = { id?: number; slug: string; name: string; sku: string; price: string; shortDescription: string; description: string; category: string; imageUrl?: string; stock: string; lowStockThreshold: string; stockStatus: "In stock" | "Limited" | "Out of stock"; featured: boolean; image?: { filename: string; contentType: string; base64: string } | null };
+type SettingsForm = {
+  businessName: string;
+  whatsappNumber: string;
+  phone: string;
+  email: string;
+  address: string;
+  businessHours: string;
+  mapsUrl: string;
+  instagramUrl: string;
+  youtubeUrl: string;
+  shippingFee: number;
+};
+
+type CustomerStoryDraft = {
+  title: string;
+  customerName: string;
+  projectType: string;
+  caption: string;
+  imageUrl?: string;
+  image?: { filename: string; contentType: string; base64: string } | null;
+};
+
+type CustomerStoryAdmin = {
+  id: number;
+  title: string;
+  customerName?: string | null;
+  projectType?: string | null;
+  caption?: string | null;
+  imageUrl?: string | null;
+};
+
+type ProductDraft = {
+  id?: number;
+  slug: string;
+  name: string;
+  sku: string;
+  price: string;
+  shortDescription: string;
+  description: string;
+  category: string;
+  imageUrl?: string;
+  stock: string;
+  lowStockThreshold: string;
+  stockStatus: "In stock" | "Limited" | "Out of stock";
+  featured: boolean;
+  image?: { filename: string; contentType: string; base64: string } | null;
+};
 
 export default function Admin() {
   const { user, loading, isAuthenticated } = useAuth();
@@ -26,105 +123,2423 @@ function AdminWorkspace() {
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCombo, setShowAddCombo] = useState(false);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
-  const [newProduct, setNewProduct] = useState<ProductDraft>({ slug: "", name: "", sku: "", price: "", shortDescription: "", description: "", category: "Modules", stock: "0", lowStockThreshold: "5", stockStatus: "In stock", featured: false, image: null });
+  const [activeInvoiceOrder, setActiveInvoiceOrder] = useState<any | null>(null);
+
+  const [newProduct, setNewProduct] = useState<ProductDraft>({
+    slug: "",
+    name: "",
+    sku: "",
+    price: "",
+    shortDescription: "",
+    description: "",
+    category: "Development boards",
+    stock: "20",
+    lowStockThreshold: "5",
+    stockStatus: "In stock",
+    featured: false,
+    image: null,
+  });
+
   const [editingProduct, setEditingProduct] = useState<ProductDraft | null>(null);
-  const [newCombo, setNewCombo] = useState({ name: "", tagline: "", description: "", price: "", productSlugs: [] as string[] });
-  const [newStory, setNewStory] = useState<CustomerStoryDraft>({ title: "", customerName: "", projectType: "", caption: "", image: null });
+  const [newCombo, setNewCombo] = useState({
+    name: "",
+    tagline: "",
+    description: "",
+    price: "",
+    productSlugs: [] as string[],
+  });
+
+  const [newStory, setNewStory] = useState<CustomerStoryDraft>({
+    title: "",
+    customerName: "",
+    projectType: "",
+    caption: "",
+    image: null,
+  });
+
   const [restockDraft, setRestockDraft] = useState<Record<string, string>>({});
-  const [settings, setSettings] = useState<SettingsForm>({ businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics", youtubeUrl: "https://www.youtube.com/@haidenlabs", shippingFee: 50 });
+  const [settings, setSettings] = useState<SettingsForm>({
+    businessName: "HAIDRONICS",
+    whatsappNumber: "918248453861",
+    phone: "",
+    email: "",
+    address: "",
+    businessHours: "",
+    mapsUrl: "",
+    instagramUrl: "https://www.instagram.com/haidronics",
+    youtubeUrl: "https://www.youtube.com/@haidenlabs",
+    shippingFee: 50,
+  });
+
   const utils = trpc.useUtils();
   const productsQuery = trpc.admin.products.list.useQuery(undefined, { retry: false });
   const requestsQuery = trpc.admin.requests.list.useQuery(undefined, { enabled: section === "requests", retry: false });
   const analyticsQuery = trpc.admin.analytics.list.useQuery(undefined, { enabled: section === "analytics", retry: false });
   const comboQuery = trpc.admin.comboKits.list.useQuery(undefined, { enabled: section === "comboKits", retry: false });
   const storiesQuery = trpc.admin.customerStories.list.useQuery(undefined, { enabled: section === "customerStories", retry: false });
-  const ordersQuery = trpc.admin.orders.list.useQuery(undefined, { enabled: section === "orders", retry: false });
-  const inventoryQuery = trpc.admin.inventory.movements.useQuery(undefined, { enabled: section === "inventory", retry: false });
-  const transactionsQuery = trpc.admin.transactions.list.useQuery(undefined, { enabled: section === "transactions", retry: false });
+  const ordersQuery = trpc.admin.orders.list.useQuery(undefined, { enabled: section === "orders" || section === "reports", retry: false });
+  const inventoryQuery = trpc.admin.inventory.movements.useQuery(undefined, { enabled: section === "inventory" || section === "reports", retry: false });
+  const transactionsQuery = trpc.admin.transactions.list.useQuery(undefined, { enabled: section === "transactions" || section === "reports", retry: false });
   const auditQuery = trpc.admin.audit.list.useQuery(undefined, { enabled: section === "audit", retry: false });
   const metricsQuery = trpc.admin.reports.metrics.useQuery(undefined, { retry: false });
-  const createMutation = trpc.admin.products.create.useMutation({ onSuccess: async () => { setShowAdd(false); await utils.admin.products.list.invalidate(); } });
-  const updateMutation = trpc.admin.products.update.useMutation({ onSuccess: async () => { setEditingProduct(null); await utils.admin.products.list.invalidate(); } });
+
+  const createMutation = trpc.admin.products.create.useMutation({
+    onSuccess: async () => {
+      setShowAdd(false);
+      toast.success("Product created in catalog!");
+      await utils.admin.products.list.invalidate();
+    },
+  });
+
+  const updateMutation = trpc.admin.products.update.useMutation({
+    onSuccess: async () => {
+      setEditingProduct(null);
+      toast.success("Product updated!");
+      await utils.admin.products.list.invalidate();
+    },
+  });
+
   const uploadMutation = trpc.admin.products.uploadImage.useMutation();
-  const hideMutation = trpc.admin.products.hide.useMutation({ onSuccess: () => utils.admin.products.list.invalidate() });
-  const createComboMutation = trpc.admin.comboKits.create.useMutation({ onSuccess: async () => { setShowAddCombo(false); await utils.admin.comboKits.list.invalidate(); } });
-  const hideComboMutation = trpc.admin.comboKits.hide.useMutation({ onSuccess: () => utils.admin.comboKits.list.invalidate() });
-  const createStoryMutation = trpc.admin.customerStories.create.useMutation({ onSuccess: async () => { setShowAddCombo(false); setNewStory({ title: "", customerName: "", projectType: "", caption: "", image: null }); await utils.admin.customerStories.list.invalidate(); } });
-  const hideStoryMutation = trpc.admin.customerStories.hide.useMutation({ onSuccess: () => utils.admin.customerStories.list.invalidate() });
-  const verifyPaymentMutation = trpc.admin.orders.verifyPayment.useMutation({ onSuccess: async () => { await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.reports.metrics.invalidate(), utils.admin.inventory.movements.invalidate(), utils.admin.transactions.list.invalidate(), utils.admin.audit.list.invalidate()]); } });
-  const rejectPaymentMutation = trpc.admin.orders.rejectPayment.useMutation({ onSuccess: async () => { await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.reports.metrics.invalidate(), utils.admin.audit.list.invalidate()]); } });
-  const transitionOrderMutation = trpc.admin.orders.transition.useMutation({ onSuccess: async () => { await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.audit.list.invalidate()]); } });
-  const restockMutation = trpc.admin.inventory.restock.useMutation({ onSuccess: async () => { setRestockDraft({}); await Promise.all([utils.admin.products.list.invalidate(), utils.admin.inventory.movements.invalidate(), utils.admin.reports.metrics.invalidate(), utils.admin.audit.list.invalidate()]); } });
+  const hideMutation = trpc.admin.products.hide.useMutation({
+    onSuccess: () => {
+      toast.success("Product hidden from storefront.");
+      utils.admin.products.list.invalidate();
+    },
+  });
+
+  const createComboMutation = trpc.admin.comboKits.create.useMutation({
+    onSuccess: async () => {
+      setShowAddCombo(false);
+      toast.success("Combo kit published!");
+      await utils.admin.comboKits.list.invalidate();
+    },
+  });
+
+  const hideComboMutation = trpc.admin.comboKits.hide.useMutation({
+    onSuccess: () => {
+      toast.success("Combo kit removed.");
+      utils.admin.comboKits.list.invalidate();
+    },
+  });
+
+  const createStoryMutation = trpc.admin.customerStories.create.useMutation({
+    onSuccess: async () => {
+      setShowAddCombo(false);
+      setNewStory({ title: "", customerName: "", projectType: "", caption: "", image: null });
+      toast.success("Customer story added!");
+      await utils.admin.customerStories.invalidate();
+    },
+  });
+
+  const hideStoryMutation = trpc.admin.customerStories.hide.useMutation({
+    onSuccess: () => utils.admin.customerStories.invalidate(),
+  });
+
+  const verifyPaymentMutation = trpc.admin.orders.verifyPayment.useMutation({
+    onSuccess: async (res) => {
+      toast.success(`Payment verified for order ${res.orderNumber}! Stock deducted.`);
+      await Promise.all([
+        utils.admin.orders.list.invalidate(),
+        utils.admin.reports.metrics.invalidate(),
+        utils.admin.inventory.movements.invalidate(),
+        utils.admin.transactions.list.invalidate(),
+        utils.admin.audit.list.invalidate(),
+      ]);
+    },
+    onError: (err) => toast.error(`Verification error: ${err.message}`),
+  });
+
+  const rejectPaymentMutation = trpc.admin.orders.rejectPayment.useMutation({
+    onSuccess: async () => {
+      toast.info("Order payment marked rejected.");
+      await Promise.all([
+        utils.admin.orders.list.invalidate(),
+        utils.admin.reports.metrics.invalidate(),
+        utils.admin.audit.list.invalidate(),
+      ]);
+    },
+  });
+
+  const transitionOrderMutation = trpc.admin.orders.transition.useMutation({
+    onSuccess: async (res) => {
+      toast.success(`Order moved to ${res.status}`);
+      await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.audit.list.invalidate()]);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const overrideAmountMutation = trpc.admin.orders.overrideAmount.useMutation({
+    onSuccess: async (res) => {
+      toast.success(`Order amount updated to ${formatINR(res.finalAmount)}`);
+      await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.audit.list.invalidate()]);
+    },
+  });
+
+  const generateInvoiceMutation = trpc.admin.orders.generateInvoice.useMutation({
+    onSuccess: async (res) => {
+      toast.success(`Invoice ${res.invoiceId} ready!`);
+      setActiveInvoiceOrder({ ...res.order, items: res.items });
+      await utils.admin.orders.list.invalidate();
+    },
+  });
+
+  const restockMutation = trpc.admin.inventory.restock.useMutation({
+    onSuccess: async () => {
+      setRestockDraft({});
+      toast.success("Stock updated successfully!");
+      await Promise.all([
+        utils.admin.products.list.invalidate(),
+        utils.admin.inventory.movements.invalidate(),
+        utils.admin.reports.metrics.invalidate(),
+        utils.admin.audit.list.invalidate(),
+      ]);
+    },
+  });
+
   const settingsQuery = trpc.catalog.settings.useQuery();
-  const saveSettingsMutation = trpc.admin.settings.save.useMutation({ onSuccess: async () => { await utils.catalog.settings.invalidate(); } });
-  useEffect(() => { const data = settingsQuery.data as Partial<SettingsForm> | undefined; if (data) setSettings((current) => ({ ...current, ...data, instagramUrl: data.instagramUrl || current.instagramUrl, youtubeUrl: data.youtubeUrl || current.youtubeUrl })); }, [settingsQuery.data]);
+  const saveSettingsMutation = trpc.admin.settings.save.useMutation({
+    onSuccess: async () => {
+      toast.success("Business settings saved!");
+      await utils.catalog.settings.invalidate();
+    },
+  });
+
+  useEffect(() => {
+    const data = settingsQuery.data as Partial<SettingsForm> | undefined;
+    if (data) {
+      setSettings((current) => ({
+        ...current,
+        ...data,
+        instagramUrl: data.instagramUrl || current.instagramUrl,
+        youtubeUrl: data.youtubeUrl || current.youtubeUrl,
+      }));
+    }
+  }, [settingsQuery.data]);
+
   const liveProducts = normalizeApiProducts(productsQuery.data as Array<Record<string, unknown>> | undefined);
-const catalogProducts = (liveProducts.length ? liveProducts : seedProducts).filter((product) => !hiddenIds.includes(product.id));
+  const catalogProducts = (liveProducts.length ? liveProducts : seedProducts).filter((product) => !hiddenIds.includes(product.id));
   const comboKits = normalizeApiComboKits(comboQuery.data as Array<Record<string, unknown>> | undefined);
-  const filtered = useMemo(() => catalogProducts.filter((product) => `${product.name} ${product.sku} ${product.category}`.toLowerCase().includes(search.toLowerCase())), [catalogProducts, search]);
+
+  const filtered = useMemo(
+    () =>
+      catalogProducts.filter((product) =>
+        `${product.name} ${product.sku} ${product.category}`.toLowerCase().includes(search.toLowerCase())
+      ),
+    [catalogProducts, search]
+  );
+
   const addProduct = async () => {
-    if (!newProduct.name || !newProduct.price) return;
+    if (!newProduct.name || !newProduct.price) {
+      toast.error("Please provide a name and price.");
+      return;
+    }
     const slug = newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     let imageUrl = newProduct.imageUrl;
-    if (newProduct.image) imageUrl = (await uploadMutation.mutateAsync(newProduct.image)).url;
-    createMutation.mutate({ slug, name: newProduct.name, sku: newProduct.sku || undefined, price: Number(newProduct.price), shortDescription: newProduct.shortDescription || "New catalog component.", description: newProduct.description || undefined, category: newProduct.category, tags: "", specs: "[]", imageUrl, stockStatus: newProduct.stockStatus, stock: Number(newProduct.stock), lowStockThreshold: Number(newProduct.lowStockThreshold), featured: newProduct.featured ? 1 : 0 });
+    // If local image base64 provided, use it directly or try upload
+    if (newProduct.image?.base64) {
+      try {
+        const res = await uploadMutation.mutateAsync(newProduct.image);
+        imageUrl = res.url;
+      } catch {
+        // Fallback to storing compressed base64 data URL
+        imageUrl = newProduct.image.base64;
+      }
+    }
+
+    createMutation.mutate({
+      slug,
+      name: newProduct.name,
+      sku: newProduct.sku || undefined,
+      price: Number(newProduct.price),
+      shortDescription: newProduct.shortDescription || "New catalog component.",
+      description: newProduct.description || undefined,
+      category: newProduct.category,
+      tags: "",
+      specs: "[]",
+      imageUrl,
+      stockStatus: newProduct.stockStatus,
+      stock: Number(newProduct.stock),
+      lowStockThreshold: Number(newProduct.lowStockThreshold),
+      featured: newProduct.featured ? 1 : 0,
+    });
   };
-  const editProduct = async (draft: ProductDraft) => { if (!draft.id) return; let imageUrl = draft.imageUrl; if (draft.image) imageUrl = (await uploadMutation.mutateAsync(draft.image)).url; updateMutation.mutate({ id: draft.id, slug: draft.slug, name: draft.name, sku: draft.sku || undefined, price: Number(draft.price), shortDescription: draft.shortDescription, description: draft.description, category: draft.category, imageUrl, stockStatus: draft.stockStatus, stock: Number(draft.stock), lowStockThreshold: Number(draft.lowStockThreshold), featured: draft.featured ? 1 : 0 }); };
-  const hideProduct = (product: Product) => { if (product.dbId) hideMutation.mutate({ id: product.dbId }); else setHiddenIds((current) => [...current, product.id]); };
-  const createCombo = () => { if (!newCombo.name || !newCombo.price || newCombo.productSlugs.length === 0) return; const slug = newCombo.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); createComboMutation.mutate({ slug, name: newCombo.name, tagline: newCombo.tagline, description: newCombo.description, price: Number(newCombo.price), featured: 1, items: newCombo.productSlugs.map((productSlug) => ({ productSlug, quantity: 1 })) }); };
-  const hideCombo = (id: number) => hideComboMutation.mutate({ id });
-  const addStory = async () => { if (!newStory.title) return; let imageUrl = newStory.imageUrl; if (newStory.image) imageUrl = (await uploadMutation.mutateAsync(newStory.image)).url; createStoryMutation.mutate({ title: newStory.title, customerName: newStory.customerName || undefined, projectType: newStory.projectType || undefined, caption: newStory.caption || undefined, imageUrl, featured: 1 }); };
-  const hideStory = (id: number) => hideStoryMutation.mutate({ id });
-  const restock = (product: Product) => { if (!product.dbId) return; const amount = Number(restockDraft[String(product.dbId)] || 0); if (amount > 0) restockMutation.mutate({ productId: product.dbId, amount }); };
+
+  const editProduct = async (draft: ProductDraft) => {
+    if (!draft.id) return;
+    let imageUrl = draft.imageUrl;
+    if (draft.image?.base64) {
+      try {
+        const res = await uploadMutation.mutateAsync(draft.image);
+        imageUrl = res.url;
+      } catch {
+        imageUrl = draft.image.base64;
+      }
+    }
+
+    updateMutation.mutate({
+      id: draft.id,
+      slug: draft.slug,
+      name: draft.name,
+      sku: draft.sku || undefined,
+      price: Number(draft.price),
+      shortDescription: draft.shortDescription,
+      description: draft.description,
+      category: draft.category,
+      imageUrl,
+      stockStatus: draft.stockStatus,
+      stock: Number(draft.stock),
+      lowStockThreshold: Number(draft.lowStockThreshold),
+      featured: draft.featured ? 1 : 0,
+    });
+  };
+
+  const hideProduct = (product: Product) => {
+    if (product.dbId) hideMutation.mutate({ id: product.dbId });
+    else setHiddenIds((current) => [...current, product.id]);
+  };
+
+  const createCombo = () => {
+    if (!newCombo.name || !newCombo.price || newCombo.productSlugs.length === 0) {
+      toast.error("Please provide combo name, price, and select at least 1 product.");
+      return;
+    }
+    const slug = newCombo.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    createComboMutation.mutate({
+      slug,
+      name: newCombo.name,
+      tagline: newCombo.tagline,
+      description: newCombo.description,
+      price: Number(newCombo.price),
+      featured: 1,
+      items: newCombo.productSlugs.map((productSlug) => ({ productSlug, quantity: 1 })),
+    });
+  };
+
+  const restock = (product: Product) => {
+    if (!product.dbId) {
+      toast.error("This product must be saved in database first to record restock movements.");
+      return;
+    }
+    const amount = Number(restockDraft[String(product.dbId)] || 0);
+    if (amount > 0) restockMutation.mutate({ productId: product.dbId, amount });
+  };
+
   const requestCount = (requestsQuery.data?.projects?.length || 0) + (requestsQuery.data?.products?.length || 0);
 
-  return <div className="min-h-screen bg-[#eef0f0] text-[#141718]"><div className="flex min-h-screen"><aside className="hidden w-64 shrink-0 flex-col bg-[#0b0e0f] px-5 py-6 text-white lg:flex"><div className="flex items-center gap-3 border-b border-white/10 pb-6"><img src={logoIconImage} alt="HAIDRONICS" className="size-10 rounded object-cover" /><div><p className="font-display text-sm tracking-[0.18em]">HAIDRONICS</p><p className="font-mono text-[8px] uppercase tracking-[0.15em] text-white/35">admin workspace</p></div></div><nav className="mt-8 grid gap-1">{nav.map(([id, label, Icon]) => <button type="button" key={id} onClick={() => setSection(id)} className={`flex items-center gap-3 rounded-sm px-3 py-3 text-left text-sm transition-colors ${section === id ? "bg-orange-500 text-black" : "text-white/45 hover:bg-white/5 hover:text-white"}`}><Icon size={16} />{label}{id === "requests" && requestCount > 0 && <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 font-mono text-[9px]">{requestCount}</span>}<ChevronRight size={13} className="ml-auto opacity-50" /></button>)}</nav><div className="mt-auto border-t border-white/10 pt-5"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">Cloud catalog v1</p><p className="mt-2 text-xs leading-5 text-white/45">Contact and location fields are editable but unpublished until approved.</p></div></aside><div className="min-w-0 flex-1"><header className="flex h-[74px] items-center justify-between border-b border-black/10 bg-white px-5 md:px-8"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-black/35">HAIDRONICS / admin</p><h1 className="mt-1 font-display text-xl">{nav.find(([id]) => id === section)?.[1]}</h1></div><div className="flex items-center gap-3"><span className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-700 sm:flex"><span className="size-1.5 rounded-full bg-emerald-500" /> protected</span><a href="/" className="rounded-sm border border-black/10 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-black/55 hover:border-orange-500 hover:text-orange-600">View store</a></div></header><div className="border-b border-black/10 bg-white px-5 py-3 lg:hidden"><div className="flex gap-2 overflow-x-auto">{nav.map(([id, label]) => <button type="button" key={id} onClick={() => setSection(id)} className={`whitespace-nowrap rounded-full px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] ${section === id ? "bg-orange-500 text-black" : "bg-black/5 text-black/45"}`}>{label}</button>)}</div></div><main className="p-5 md:p-8">{section === "dashboard" && <Dashboard setSection={setSection} productCount={catalogProducts.length} requestCount={requestCount} metrics={metricsQuery.data} />}{section === "products" && <ProductsAdmin products={filtered} search={search} setSearch={setSearch} onAdd={() => setShowAdd(true)} onEdit={(product) => setEditingProduct({ id: product.dbId, slug: product.id, name: product.name, sku: product.sku, price: String(product.price), shortDescription: product.shortDescription, description: product.description, category: product.category, imageUrl: product.imageUrl, stock: String(product.stock || 0), lowStockThreshold: String(product.lowStockThreshold || 5), stockStatus: (product.stockStatus as ProductDraft["stockStatus"]) || "In stock", featured: Boolean(product.featured), image: null })} onDelete={hideProduct} />}{section === "comboKits" && <ComboKitsAdmin kits={comboKits} products={catalogProducts} onAdd={() => setShowAddCombo(true)} onDelete={hideCombo} />} {section === "customerStories" && <CustomerStoriesAdmin stories={(storiesQuery.data || []) as CustomerStoryAdmin[]} onAdd={() => setShowAddCombo(true)} onDelete={hideStory} />} {section === "orders" && <OrdersAdmin orders={(ordersQuery.data || []) as any[]} onVerify={(id, reference) => verifyPaymentMutation.mutate({ id, reference })} onReject={(id) => rejectPaymentMutation.mutate({ id })} onTransition={(id, status) => transitionOrderMutation.mutate({ id, status })} busy={verifyPaymentMutation.isPending || rejectPaymentMutation.isPending || transitionOrderMutation.isPending} />} {section === "inventory" && <InventoryAdmin products={catalogProducts} movements={(inventoryQuery.data || []) as any[]} restockDraft={restockDraft} setRestockDraft={setRestockDraft} onRestock={restock} busy={restockMutation.isPending} />} {section === "transactions" && <TransactionsAdmin rows={(transactionsQuery.data || []) as any[]} />} {section === "reports" && <ReportsAdmin metrics={metricsQuery.data} products={catalogProducts} />} {section === "audit" && <AuditAdmin rows={(auditQuery.data || []) as any[]} />}{section === "requests" && <Requests data={requestsQuery.data} />}{section === "analytics" && <Analytics data={analyticsQuery.data} />}{section === "settings" && <Settings settings={settings} setSettings={setSettings} onSave={() => saveSettingsMutation.mutate(settings)} saving={saveSettingsMutation.isPending} />}</main></div></div>{showAdd && <AddProductModal product={newProduct} setProduct={setNewProduct} onClose={() => setShowAdd(false)} onSave={addProduct} saving={createMutation.isPending || uploadMutation.isPending} uploadError={uploadMutation.error?.message} />}{editingProduct && <AddProductModal product={editingProduct} setProduct={(value) => setEditingProduct(typeof value === "function" ? value(editingProduct) : value)} onClose={() => setEditingProduct(null)} onSave={() => editProduct(editingProduct)} saving={updateMutation.isPending || uploadMutation.isPending} editing uploadError={uploadMutation.error?.message} />}{showAddCombo && section === "comboKits" && <AddComboModal combo={newCombo} setCombo={setNewCombo} products={catalogProducts} onClose={() => setShowAddCombo(false)} onSave={createCombo} saving={createComboMutation.isPending} />}{showAddCombo && section === "customerStories" && <AddCustomerStoryModal story={newStory} setStory={setNewStory} onClose={() => setShowAddCombo(false)} onSave={addStory} saving={createStoryMutation.isPending || uploadMutation.isPending} uploadError={uploadMutation.error?.message} />}</div>;
+  return (
+    <div className="min-h-screen bg-[#eef0f0] text-[#141718]">
+      <div className="flex min-h-screen">
+        {/* Admin Sidebar */}
+        <aside className="hidden w-64 shrink-0 flex-col bg-[#0b0e0f] px-5 py-6 text-white lg:flex">
+          <div className="flex items-center gap-3 border-b border-white/10 pb-6">
+            <img src={logoIconImage} alt="HAIDRONICS" className="size-10 rounded-lg object-contain bg-[#111416] p-1" />
+            <div>
+              <p className="font-display text-base font-bold tracking-[0.16em] text-white">HAIDRONICS</p>
+              <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-orange-400 font-semibold">Admin Workspace</p>
+            </div>
+          </div>
+
+          <nav className="mt-6 grid gap-1">
+            {nav.map(([id, label, Icon]) => (
+              <button
+                type="button"
+                key={id}
+                onClick={() => setSection(id)}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  section === id ? "bg-orange-500 text-black font-semibold" : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+                {id === "requests" && requestCount > 0 && (
+                  <span className="ml-auto rounded-full bg-orange-400/20 px-2 py-0.5 font-mono text-[9px] text-orange-300">
+                    {requestCount}
+                  </span>
+                )}
+                <ChevronRight size={13} className="ml-auto opacity-40" />
+              </button>
+            ))}
+          </nav>
+
+          <div className="mt-auto border-t border-white/10 pt-4">
+            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">HAIDRONICS Cloud V1</p>
+            <p className="mt-1 text-[11px] leading-4 text-white/50">Stock, orders & invoicing integration.</p>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="min-w-0 flex-1">
+          <header className="flex h-[74px] items-center justify-between border-b border-black/10 bg-white px-5 md:px-8">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-black/40">HAIDRONICS / Administration</p>
+              <h1 className="mt-1 font-display text-xl font-bold">{nav.find(([id]) => id === section)?.[1]}</h1>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-700 sm:flex border border-emerald-200">
+                <span className="size-1.5 rounded-full bg-emerald-500" /> Admin Role Active
+              </span>
+              <a
+                href="/"
+                className="rounded-md border border-black/15 bg-black/5 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-black hover:text-white transition-colors"
+              >
+                View Store
+              </a>
+            </div>
+          </header>
+
+          {/* Mobile Tab Scroll */}
+          <div className="border-b border-black/10 bg-white px-4 py-2.5 lg:hidden overflow-x-auto">
+            <div className="flex gap-2">
+              {nav.map(([id, label]) => (
+                <button
+                  type="button"
+                  key={id}
+                  onClick={() => setSection(id)}
+                  className={`whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] ${
+                    section === id ? "bg-orange-500 text-black font-bold" : "bg-black/5 text-black/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <main className="p-5 md:p-8">
+            {section === "dashboard" && (
+              <Dashboard
+                setSection={setSection}
+                productCount={catalogProducts.length}
+                requestCount={requestCount}
+                metrics={metricsQuery.data}
+                orders={(ordersQuery.data || []) as any[]}
+                products={catalogProducts}
+                onVerify={(id, reference) => verifyPaymentMutation.mutate({ id, reference })}
+                onTransition={(id, status) => transitionOrderMutation.mutate({ id, status })}
+                onViewInvoice={(order) => setActiveInvoiceOrder(order)}
+                onOpenAddProduct={() => setShowAdd(true)}
+                onOpenAddCombo={() => setShowAddCombo(true)}
+                onRestock={restock}
+                restockDraft={restockDraft}
+                setRestockDraft={setRestockDraft}
+              />
+            )}
+
+            {section === "orders" && (
+              <OrdersAdmin
+                orders={(ordersQuery.data || []) as any[]}
+                onVerify={(id, reference) => verifyPaymentMutation.mutate({ id, reference })}
+                onReject={(id) => rejectPaymentMutation.mutate({ id })}
+                onTransition={(id, status) => transitionOrderMutation.mutate({ id, status })}
+                onOverrideAmount={(id, finalAmount, reason) => overrideAmountMutation.mutate({ id, finalAmount, reason })}
+                onGenerateInvoice={(id) => generateInvoiceMutation.mutate({ id })}
+                onViewInvoice={(order) => setActiveInvoiceOrder(order)}
+                busy={
+                  verifyPaymentMutation.isPending ||
+                  rejectPaymentMutation.isPending ||
+                  transitionOrderMutation.isPending ||
+                  overrideAmountMutation.isPending ||
+                  generateInvoiceMutation.isPending
+                }
+              />
+            )}
+
+            {section === "inventory" && (
+              <InventoryAdmin
+                products={catalogProducts}
+                movements={(inventoryQuery.data || []) as any[]}
+                restockDraft={restockDraft}
+                setRestockDraft={setRestockDraft}
+                onRestock={restock}
+                busy={restockMutation.isPending}
+              />
+            )}
+
+            {section === "products" && (
+              <ProductsAdmin
+                products={filtered}
+                search={search}
+                setSearch={setSearch}
+                onAdd={() => setShowAdd(true)}
+                onEdit={(product) =>
+                  setEditingProduct({
+                    id: product.dbId,
+                    slug: product.id,
+                    name: product.name,
+                    sku: product.sku,
+                    price: String(product.price),
+                    shortDescription: product.shortDescription,
+                    description: product.description,
+                    category: product.category,
+                    imageUrl: product.imageUrl,
+                    stock: String(product.stock || 0),
+                    lowStockThreshold: String(product.lowStockThreshold || 5),
+                    stockStatus: (product.stockStatus as ProductDraft["stockStatus"]) || "In stock",
+                    featured: Boolean(product.featured),
+                    image: null,
+                  })
+                }
+                onDelete={hideProduct}
+              />
+            )}
+
+            {section === "comboKits" && (
+              <ComboKitsAdmin
+                kits={comboKits}
+                products={catalogProducts}
+                onAdd={() => setShowAddCombo(true)}
+                onDelete={(id) => hideComboMutation.mutate({ id })}
+              />
+            )}
+
+            {section === "customerStories" && (
+              <CustomerStoriesAdmin
+                stories={(storiesQuery.data || []) as CustomerStoryAdmin[]}
+                onAdd={() => setShowAddCombo(true)}
+                onDelete={(id) => hideStoryMutation.mutate({ id })}
+              />
+            )}
+
+            {section === "transactions" && (
+              <TransactionsAdmin rows={(transactionsQuery.data || []) as any[]} />
+            )}
+
+            {section === "reports" && (
+              <ReportsAdmin
+                metrics={metricsQuery.data}
+                products={catalogProducts}
+                orders={(ordersQuery.data || []) as any[]}
+                inventory={(inventoryQuery.data || []) as any[]}
+                transactions={(transactionsQuery.data || []) as any[]}
+              />
+            )}
+
+            {section === "audit" && <AuditAdmin rows={(auditQuery.data || []) as any[]} />}
+            {section === "requests" && <Requests data={requestsQuery.data} />}
+            {section === "analytics" && <Analytics data={analyticsQuery.data} />}
+
+            {section === "settings" && (
+              <Settings
+                settings={settings}
+                setSettings={setSettings}
+                onSave={() => saveSettingsMutation.mutate(settings)}
+                saving={saveSettingsMutation.isPending}
+              />
+            )}
+          </main>
+        </div>
+      </div>
+
+      {/* Add Product Modal */}
+      {showAdd && (
+        <AddProductModal
+          product={newProduct}
+          setProduct={setNewProduct}
+          onClose={() => setShowAdd(false)}
+          onSave={addProduct}
+          saving={createMutation.isPending || uploadMutation.isPending}
+          uploadError={uploadMutation.error?.message}
+        />
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <AddProductModal
+          product={editingProduct}
+          setProduct={(value) =>
+            setEditingProduct(typeof value === "function" ? value(editingProduct) : value)
+          }
+          onClose={() => setEditingProduct(null)}
+          onSave={() => editProduct(editingProduct)}
+          saving={updateMutation.isPending || uploadMutation.isPending}
+          editing
+          uploadError={uploadMutation.error?.message}
+        />
+      )}
+
+      {/* Add Combo Modal */}
+      {showAddCombo && section === "comboKits" && (
+        <AddComboModal
+          combo={newCombo}
+          setCombo={setNewCombo}
+          products={catalogProducts}
+          onClose={() => setShowAddCombo(false)}
+          onSave={createCombo}
+          saving={createComboMutation.isPending}
+        />
+      )}
+
+      {/* Invoice Viewer Modal */}
+      {activeInvoiceOrder && (
+        <InvoiceModal
+          order={activeInvoiceOrder}
+          settings={settings}
+          onClose={() => setActiveInvoiceOrder(null)}
+        />
+      )}
+    </div>
+  );
 }
 
-function AdminLoading() { return <div className="grid min-h-screen place-items-center bg-[#0b0e0f] text-white"><Loader2 className="animate-spin text-orange-400" /></div>; }
-function AdminGate() { return <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white"><div className="w-full max-w-md border border-orange-400/25 bg-[#111416] p-8 text-center"><img src={logoIconImage} alt="HAIDRONICS" className="mx-auto size-16 rounded object-cover" /><p className="eyebrow mt-6 text-orange-300">Protected workspace</p><h1 className="mt-3 font-display text-4xl">Admin access</h1><p className="mt-4 text-sm leading-6 text-white/50">Sign in with the authorized HAIDRONICS account to manage products, requests, analytics, and business settings.</p><button type="button" onClick={() => startLogin()} className="mt-7 inline-flex items-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><LogIn size={15} /> Sign in</button><a href="/" className="mt-4 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white">Return to storefront</a></div></div>; }
-function AdminDenied({ userName }: { userName: string }) { return <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white"><div className="w-full max-w-md border border-red-400/25 bg-[#111416] p-8 text-center"><p className="eyebrow text-red-300">Access denied</p><h1 className="mt-3 font-display text-4xl">Not an admin.</h1><p className="mt-4 text-sm leading-6 text-white/50">{userName} is signed in, but does not have the admin role. Promote the account in the users table before entering this workspace.</p><a href="/" className="mt-7 inline-flex rounded-sm border border-white/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white">Return to storefront</a></div></div>; }
-function Dashboard({ setSection, productCount, requestCount, metrics }: { setSection: (section: string) => void; productCount: number; requestCount: number; metrics?: { orders: number; pendingPayments: number; lowStock: number; todaySales: number; revenue: number } }) { return <div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Orders" value={String(metrics?.orders || 0)} /><MetricCard label="Pending payments" value={String(metrics?.pendingPayments || 0)} accent="amber" /><MetricCard label="Low stock" value={String(metrics?.lowStock || 0)} accent="red" /><MetricCard label="Verified sales" value={formatINR(metrics?.todaySales || 0)} accent="green" /></div><div className="mt-8 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Today / control room</p><h2 className="mt-2 font-display text-4xl md:text-5xl">Know what’s moving.</h2></div><button type="button" onClick={() => setSection("products")} className="inline-flex items-center gap-2 self-start rounded-sm bg-black px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white md:self-auto">Manage catalog <ChevronRight size={14} /></button></div><div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[[Users, "Catalog products", String(productCount), "live"], [Eye, "Product views", "438", "+24%"], [MessageCircle, "WhatsApp clicks", "27", "+11%"], [CirclePlus, "Requests", String(requestCount), "persisted"]].map(([Icon, label, value, change]) => <div key={label as string} className="rounded-sm bg-white p-5 shadow-[0_10px_30px_rgba(0,0,0,0.04)]"><div className="flex items-center justify-between"><Icon size={18} className="text-orange-600" /><span className="font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-600">{change as string}</span></div><p className="mt-8 font-mono text-[10px] uppercase tracking-[0.14em] text-black/40">{label as string}</p><p className="mt-1 font-display text-4xl">{value as string}</p></div>)}</div><div className="mt-8 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]"><div className="rounded-sm bg-white p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-black/40">Traffic / last 7 days</p><p className="mt-2 font-display text-2xl">Visitor activity</p></div><BarChart3 size={19} className="text-orange-600" /></div><div className="mt-8 flex h-44 items-end gap-3 border-b border-black/10">{[44, 65, 52, 78, 58, 86, 69, 94, 80, 100, 72, 88].map((height, index) => <div key={index} className="group flex flex-1 flex-col justify-end gap-2"><div className={`rounded-t-sm transition-colors group-hover:bg-orange-500 ${index > 8 ? "bg-orange-500" : "bg-black/10"}`} style={{ height: `${height}%` }} /></div>)}</div><div className="mt-3 flex justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-black/30"><span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span></div></div><div className="rounded-sm bg-[#111416] p-6 text-white"><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Admin scope</p><p className="mt-2 font-display text-2xl">What you can manage</p><div className="mt-7 space-y-4 text-sm text-white/60"><p>✓ Add and hide catalog products</p><p>✓ View project/product requests</p><p>✓ Review analytics events</p><p>✓ Configure approved contact details</p><p>✓ Verify payments and control order status</p><p>✓ Track stock, transactions, reports, and audit history</p></div></div></div></div>; }
-function ProductsAdmin({ products, search, setSearch, onAdd, onEdit, onDelete }: { products: Product[]; search: string; setSearch: (value: string) => void; onAdd: () => void; onEdit: (product: Product) => void; onDelete: (product: Product) => void }) { return <div><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Catalog / database</p><h2 className="mt-2 font-display text-4xl">Products <span className="text-black/25">/{products.length}</span></h2></div><button type="button" onClick={onAdd} className="inline-flex items-center gap-2 self-start rounded-sm bg-orange-500 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><CirclePlus size={15} /> Add product</button></div><div className="mt-8 flex items-center gap-3 rounded-sm bg-white px-4"><Search size={17} className="text-black/35" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search catalog..." className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-black/30" /></div><div className="mt-5 overflow-x-auto rounded-sm bg-white"><table className="w-full min-w-[640px] text-left"><thead className="border-b border-black/10 font-mono text-[9px] uppercase tracking-[0.13em] text-black/35"><tr><th className="px-5 py-4">Product</th><th className="px-5 py-4">SKU</th><th className="px-5 py-4">Price</th><th className="px-5 py-4">Featured</th><th className="px-5 py-4">Action</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-b border-black/[0.06] last:border-0"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="product-mini-art-light"><span>{product.image === "board" ? "ESP32" : product.image.toUpperCase()}</span></span><div><p className="text-sm font-medium">{product.name}</p><p className="mt-1 text-xs text-black/40">{product.category}</p></div></div></td><td className="px-5 py-4 font-mono text-[10px] text-black/45">{product.sku}</td><td className="px-5 py-4 font-mono text-xs">{formatINR(product.price)}</td><td className="px-5 py-4">{product.featured ? <span className="rounded-full bg-orange-100 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-orange-700">Featured</span> : <span className="text-black/25">—</span>}</td><td className="px-5 py-4"><div className="flex items-center gap-3"><button type="button" onClick={() => onEdit(product)} className="font-mono text-[9px] uppercase tracking-[0.12em] text-black/40 hover:text-orange-600">Edit</button><button type="button" onClick={() => onDelete(product)} className="text-black/30 hover:text-red-600"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div></div>; }
-function Requests({ data }: { data?: { projects: Array<{ id: number; name: string; projectName: string | null; budget: string | null; createdAt: Date }>; products: Array<{ id: number; component: string; quantity: number; createdAt: Date }> } }) { const items = [...(data?.projects || []).map((item) => ({ type: "PROJECT SUPPORT", title: item.projectName || "Project brief", meta: `${item.name} · ${item.budget || "Budget not provided"}`, date: item.createdAt })), ...(data?.products || []).map((item) => ({ type: "PRODUCT REQUEST", title: item.component, meta: `Quantity · ${item.quantity}`, date: item.createdAt }))]; return <div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Inbox / persisted requests</p><h2 className="mt-2 font-display text-4xl">Requests <span className="text-black/25">/ {items.length}</span></h2><div className="mt-8 grid gap-4">{items.length ? items.map((item, index) => <div key={`${item.type}-${index}`} className="flex flex-col justify-between gap-5 rounded-sm bg-white p-5 sm:flex-row sm:items-center"><div><p className="font-mono text-[9px] uppercase tracking-[0.13em] text-orange-600">{item.type}</p><p className="mt-2 font-display text-xl">{item.title}</p><p className="mt-1 text-sm text-black/45">{item.meta}</p></div><span className="font-mono text-[9px] uppercase tracking-[0.13em] text-black/30">{new Date(item.date).toLocaleString()}</span></div>) : <div className="rounded-sm bg-white p-8 text-sm text-black/45">No persisted requests yet. Submitted support and product request forms will appear here.</div>}</div></div>; }
-function Analytics({ data }: { data?: Array<{ event: string; createdAt: Date }> }) { const eventCounts = (data || []).reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.event]: (acc[item.event] || 0) + 1 }), {}); return <div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Analytics / persisted events</p><h2 className="mt-2 font-display text-4xl">What customers are doing.</h2><div className="mt-8 grid gap-4 md:grid-cols-3">{[["Tracked events", String(data?.length || 0), "page views, searches, clicks"], ["WhatsApp clicks", String(eventCounts.whatsapp_click || 0), "recorded handoffs"], ["Product views", String(eventCounts.product_view || 0), "catalog detail opens"]].map(([label, value, detail]) => <div key={label} className="rounded-sm bg-white p-5"><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-black/40">{label}</p><p className="mt-3 font-display text-4xl">{value}</p><p className="mt-2 text-sm text-black/45">{detail}</p></div>)}</div></div>; }
-function Settings({ settings, setSettings, onSave, saving }: { settings: SettingsForm; setSettings: React.Dispatch<React.SetStateAction<SettingsForm>>; onSave: () => void; saving: boolean }) { const fields: Array<[keyof SettingsForm, string]> = [["businessName", "Business name"], ["whatsappNumber", "WhatsApp number"], ["phone", "Phone"], ["email", "Email"], ["instagramUrl", "Instagram URL"], ["youtubeUrl", "YouTube channel URL"], ["address", "Address"], ["businessHours", "Business hours"], ["mapsUrl", "Google Maps link"], ["shippingFee", "Default shipping fee (INR)"]]; return <div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Settings / publish controls</p><h2 className="mt-2 font-display text-4xl">Business settings.</h2><div className="mt-8 max-w-2xl rounded-sm bg-white p-6 md:p-8"><p className="text-sm leading-6 text-black/55">Save your approved WhatsApp number, email, and social links here. Saved values are persisted and used by the storefront contact, footer, and WhatsApp actions.</p><div className="mt-8 grid gap-4">{fields.map(([key, label]) => <label key={key}><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/40">{label}</span><input type={key === "email" ? "email" : key === "shippingFee" ? "number" : key.endsWith("Url") ? "url" : "text"} value={settings[key]} onChange={(event) => setSettings((current) => ({ ...current, [key]: event.target.value }))} placeholder="Not configured" className="h-11 w-full rounded-sm border border-black/10 bg-[#f7f8f8] px-3 text-sm text-black/65 outline-none focus:border-orange-500" /></label>)}</div><button type="button" onClick={onSave} disabled={saving} className="mt-7 inline-flex items-center gap-2 rounded-sm bg-black px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white disabled:opacity-50">{saving && <Loader2 size={13} className="animate-spin" />} Save settings</button></div></div>; }
-function AddProductModal({ product, setProduct, onClose, onSave, saving, editing = false, uploadError }: { product: ProductDraft; setProduct: (value: React.SetStateAction<ProductDraft>) => void; onClose: () => void; onSave: () => void; saving: boolean; editing?: boolean; uploadError?: string }) {
-  const update = (patch: Partial<ProductDraft>) => setProduct((current) => ({ ...(current || product), ...patch }) as ProductDraft);
+function AdminLoading() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-[#0b0e0f] text-white">
+      <Loader2 className="animate-spin text-orange-400 size-8" />
+    </div>
+  );
+}
+
+function AdminGate() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white">
+      <div className="w-full max-w-md border border-orange-400/25 bg-[#111416] p-8 text-center rounded-xl shadow-2xl">
+        <img src={logoIconImage} alt="HAIDRONICS" className="mx-auto size-16 rounded-lg object-contain bg-white/5 p-2" />
+        <p className="eyebrow mt-6 text-orange-300">Protected Workspace</p>
+        <h1 className="mt-3 font-display text-4xl">Admin Access</h1>
+        <p className="mt-4 text-sm leading-6 text-white/50">
+          Sign in with your authorized HAIDRONICS account to manage catalog, orders, stock, and automation.
+        </p>
+        <button
+          type="button"
+          onClick={() => startLogin()}
+          className="mt-7 inline-flex items-center gap-2 rounded-md bg-[#ff6417] px-6 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400"
+        >
+          <LogIn size={15} /> Continue with Sign In
+        </button>
+        <a href="/" className="mt-5 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white">
+          Return to Storefront
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function AdminDenied({ userName }: { userName: string }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white">
+      <div className="w-full max-w-md border border-red-400/25 bg-[#111416] p-8 text-center rounded-xl">
+        <p className="eyebrow text-red-300">Access Denied</p>
+        <h1 className="mt-3 font-display text-4xl">Not an Admin</h1>
+        <p className="mt-4 text-sm leading-6 text-white/50">
+          Signed in as <strong>{userName}</strong>. This account does not have administrator privileges.
+        </p>
+        <a href="/" className="mt-7 inline-flex rounded-md border border-white/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:border-orange-400">
+          Return to Storefront
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({
+  setSection,
+  productCount,
+  requestCount,
+  metrics,
+  orders = [],
+  products = [],
+  onVerify,
+  onTransition,
+  onViewInvoice,
+  onOpenAddProduct,
+  onOpenAddCombo,
+  onRestock,
+  restockDraft,
+  setRestockDraft,
+}: {
+  setSection: (section: string) => void;
+  productCount: number;
+  requestCount: number;
+  metrics?: { orders: number; pendingPayments: number; lowStock: number; todaySales: number; revenue: number };
+  orders: any[];
+  products: Product[];
+  onVerify: (id: number, reference?: string) => void;
+  onTransition: (id: number, status: any) => void;
+  onViewInvoice: (order: any) => void;
+  onOpenAddProduct: () => void;
+  onOpenAddCombo: () => void;
+  onRestock: (product: Product) => void;
+  restockDraft: Record<string, string>;
+  setRestockDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  const lowStockItems = useMemo(
+    () => products.filter((p) => (p.stock || 0) <= (p.lowStockThreshold || 5)),
+    [products]
+  );
+
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      ORDER_REQUESTED: 0,
+      PAYMENT_PENDING: 0,
+      ORDER_CONFIRMED: 0,
+      PACKED: 0,
+      SHIPPED: 0,
+      DELIVERED: 0,
+    };
+    orders.forEach((o) => {
+      if (counts[o.status] !== undefined) counts[o.status]++;
+    });
+    return counts;
+  }, [orders]);
+
+  const recentOrders = useMemo(() => orders.slice(0, 5), [orders]);
+
+  return (
+    <div className="space-y-7">
+      {/* Top Banner & Quick Actions */}
+      <div className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-r from-[#0b0e0f] via-[#111619] to-[#0b0e0f] p-6 text-white shadow-xl">
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 size-64 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+              </span>
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-orange-400">
+                HAIDRONICS CORE CONTROL ROOM // SYSTEM STATUS: NOMINAL (ONLINE)
+              </p>
+            </div>
+            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-white md:text-4xl">
+              Operations & Automated Fulfillment
+            </h2>
+            <p className="mt-1 text-xs text-white/50">
+              Real-time monitoring of customer WhatsApp inquiries, order state transitions, stock level telemetry, and H-Invoice generation.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onOpenAddProduct}
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-black shadow-lg shadow-orange-500/20 transition-all hover:bg-orange-400 active:scale-95"
+            >
+              <CirclePlus size={15} /> New Product
+            </button>
+            <button
+              type="button"
+              onClick={onOpenAddCombo}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur transition-all hover:border-orange-400 hover:bg-white/10"
+            >
+              <Layers3 size={15} className="text-orange-400" /> Combo Kit
+            </button>
+            <button
+              type="button"
+              onClick={() => setSection("reports")}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur transition-all hover:border-orange-400 hover:bg-white/10"
+            >
+              <FileBarChart size={15} className="text-orange-400" /> Master CSV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Cyber Metric KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="group relative overflow-hidden rounded-xl border border-black/10 bg-white p-5 shadow-sm transition-all hover:border-orange-500/40 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/50 font-bold">Total Sales (Verified)</span>
+            <ReceiptText size={18} className="text-emerald-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-black text-emerald-600">
+            {formatINR(metrics?.revenue || metrics?.todaySales || 0)}
+          </p>
+          <p className="mt-1 font-mono text-[10px] text-black/40">From verified customer payments</p>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-xl border border-black/10 bg-white p-5 shadow-sm transition-all hover:border-orange-500/40 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/50 font-bold">Total Orders</span>
+            <ClipboardList size={18} className="text-orange-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-black text-black">
+            {metrics?.orders || orders.length || 0}
+          </p>
+          <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-black/50">
+            <span className="text-amber-600 font-bold">{metrics?.pendingPayments || stageCounts.PAYMENT_PENDING || 0} pending</span>
+            <span>·</span>
+            <span className="text-emerald-600 font-bold">{stageCounts.ORDER_CONFIRMED || 0} confirmed</span>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-xl border border-black/10 bg-white p-5 shadow-sm transition-all hover:border-orange-500/40 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/50 font-bold">Low Stock Radar</span>
+            <AlertCircle size={18} className="text-red-500" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-black text-red-600">
+            {lowStockItems.length} <span className="text-xs font-normal text-black/40">items critical</span>
+          </p>
+          <p className="mt-1 font-mono text-[10px] text-black/40">Threshold ≤ 5 units in warehouse</p>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-xl border border-black/10 bg-white p-5 shadow-sm transition-all hover:border-orange-500/40 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/50 font-bold">Catalog SKU Count</span>
+            <Package size={18} className="text-orange-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-black text-black">
+            {productCount} <span className="text-xs font-normal text-black/40">active SKUs</span>
+          </p>
+          <p className="mt-1 font-mono text-[10px] text-black/40">{requestCount} persisted customer briefs</p>
+        </div>
+      </div>
+
+      {/* Interactive Order Pipeline Funnel */}
+      <div className="rounded-xl border border-black/10 bg-white p-6 shadow-sm">
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center border-b border-black/[0.06] pb-4">
+          <div>
+            <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-orange-600 font-bold">Real-time Pipeline</span>
+            <h3 className="font-display text-xl font-bold">Order Lifecycle Radar</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSection("orders")}
+            className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-black/60 hover:text-orange-600"
+          >
+            Manage All Orders <ChevronRight size={14} />
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {[
+            { key: "ORDER_REQUESTED", label: "Requested", color: "border-blue-300 bg-blue-50/50 text-blue-800", count: stageCounts.ORDER_REQUESTED },
+            { key: "PAYMENT_PENDING", label: "Payment Pending", color: "border-amber-300 bg-amber-50/50 text-amber-800", count: stageCounts.PAYMENT_PENDING },
+            { key: "ORDER_CONFIRMED", label: "Confirmed", color: "border-emerald-300 bg-emerald-50/50 text-emerald-800", count: stageCounts.ORDER_CONFIRMED },
+            { key: "PACKED", label: "Packed", color: "border-purple-300 bg-purple-50/50 text-purple-800", count: stageCounts.PACKED },
+            { key: "SHIPPED", label: "Shipped", color: "border-indigo-300 bg-indigo-50/50 text-indigo-800", count: stageCounts.SHIPPED },
+            { key: "DELIVERED", label: "Delivered", color: "border-green-300 bg-green-50/50 text-green-800", count: stageCounts.DELIVERED },
+          ].map((stage) => (
+            <button
+              key={stage.key}
+              type="button"
+              onClick={() => setSection("orders")}
+              className={`flex flex-col items-start rounded-lg border p-3.5 text-left transition-all hover:scale-[1.02] hover:shadow-sm ${stage.color}`}
+            >
+              <span className="font-mono text-[9px] uppercase tracking-wider font-bold opacity-75">{stage.label}</span>
+              <span className="mt-2 font-mono text-2xl font-black">{stage.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Two Column Grid: Recent Orders & Low Stock Radar */}
+      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
+        {/* Recent Orders Queue */}
+        <div className="rounded-xl border border-black/10 bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-black/[0.06] pb-4">
+              <div>
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-orange-600 font-bold">Fulfillment Queue</span>
+                <h3 className="font-display text-xl font-bold">Recent Customer Inquiries</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSection("orders")}
+                className="font-mono text-[10px] uppercase tracking-wider text-black/50 hover:text-orange-600 font-bold"
+              >
+                View ({orders.length})
+              </button>
+            </div>
+
+            <div className="mt-4 divide-y divide-black/[0.06]">
+              {recentOrders.length ? (
+                recentOrders.map((order) => (
+                  <div key={order.id} className="flex flex-col justify-between gap-3 py-3.5 sm:flex-row sm:items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-orange-600">
+                          {order.orderNumber || `HAI-${order.id}`}
+                        </span>
+                        <span className="rounded bg-black/5 px-2 py-0.5 font-mono text-[9px] uppercase font-semibold text-black/70">
+                          {order.status.replaceAll("_", " ")}
+                        </span>
+                        {order.amountOverridden === 1 && (
+                          <span className="rounded bg-amber-100 text-amber-800 px-1.5 py-0.2 font-mono text-[8px] font-bold uppercase">
+                            Negotiated
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-black">{order.customerName}</p>
+                      <p className="text-xs text-black/50 font-mono">
+                        📞 {order.phone} · {formatINR(order.finalAmount || order.total)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={whatsappLink(`Hi ${order.customerName}, regarding your HAIDRONICS order ${order.orderNumber}:`, order.phone)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2.5 py-1 font-mono text-[9px] font-bold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        <MessageCircle size={12} /> WhatsApp
+                      </a>
+                      {order.invoiceId ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewInvoice(order)}
+                          className="inline-flex items-center gap-1 rounded border border-black/15 bg-black/5 px-2.5 py-1 font-mono text-[9px] font-bold text-black hover:bg-black hover:text-white"
+                        >
+                          <FileText size={12} /> Invoice
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-10 text-center text-xs text-black/40 font-mono">
+                  No orders recorded yet. As customers place orders on WhatsApp / checkout, they appear here.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSection("orders")}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-black/5 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-black hover:bg-black hover:text-white transition-colors"
+          >
+            Open Complete Order Workspace <ChevronRight size={13} />
+          </button>
+        </div>
+
+        {/* Low Stock Radar with 1-Click Restock */}
+        <div className="rounded-xl border border-black/10 bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-black/[0.06] pb-4">
+              <div>
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-red-600 font-bold">Inventory Alert</span>
+                <h3 className="font-display text-xl font-bold">Low Stock Warning Radar</h3>
+              </div>
+              <span className="rounded-full bg-red-100 px-2.5 py-0.5 font-mono text-[9px] font-bold uppercase text-red-800">
+                {lowStockItems.length} Low
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {lowStockItems.length ? (
+                lowStockItems.slice(0, 5).map((product) => (
+                  <div key={product.id} className="rounded-lg border border-red-200 bg-red-50/40 p-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="truncate pr-2">
+                        <p className="text-xs font-bold text-black truncate">{product.name}</p>
+                        <p className="font-mono text-[10px] text-black/50">{product.sku} · {formatINR(product.price)}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="rounded bg-red-600 px-2 py-0.5 font-mono text-[10px] font-black text-white">
+                          {product.stock || 0} LEFT
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-between border-t border-red-200/50 pt-2 font-mono text-[9px]">
+                      <span className="text-black/50">Threshold: {product.lowStockThreshold || 5}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (product.dbId) {
+                            setRestockDraft((cur) => ({ ...cur, [String(product.dbId)]: "25" }));
+                            onRestock(product);
+                          } else {
+                            toast.error("Save product to DB before restocking.");
+                          }
+                        }}
+                        className="rounded bg-black px-2 py-1 font-bold text-white hover:bg-orange-600 transition-colors"
+                      >
+                        +25 Restock
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 text-center text-xs text-emerald-700 font-mono">
+                  ✓ All warehouse stock levels are healthy!
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSection("inventory")}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-black/5 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-black hover:bg-black hover:text-white transition-colors"
+          >
+            Open Full Inventory & Movements <ChevronRight size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* System Infrastructure Telemetry Strip */}
+      <div className="rounded-xl border border-white/10 bg-[#0b0e0f] p-5 text-white shadow-xl">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-orange-500/20 p-2.5 border border-orange-500/30">
+              <Settings2 size={20} className="text-orange-400" />
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-400 font-bold">Architecture Diagnostics</p>
+              <p className="text-sm font-semibold text-white">HAIDRONICS Cloud & Automation Engine</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 font-mono text-[10px]">
+            <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
+              <span className="text-white/40 block text-[8px] uppercase">WhatsApp Router</span>
+              <span className="text-emerald-400 font-bold">● Active (+91 8248453861)</span>
+            </div>
+            <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
+              <span className="text-white/40 block text-[8px] uppercase">H-Invoice Generator</span>
+              <span className="text-emerald-400 font-bold">● Ready (INV-YYYY-ID)</span>
+            </div>
+            <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
+              <span className="text-white/40 block text-[8px] uppercase">Price Override</span>
+              <span className="text-emerald-400 font-bold">● Server Verified</span>
+            </div>
+            <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
+              <span className="text-white/40 block text-[8px] uppercase">Inventory Sync</span>
+              <span className="text-emerald-400 font-bold">● Atomic Locking</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductsAdmin({
+  products,
+  search,
+  setSearch,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  products: Product[];
+  search: string;
+  setSearch: (value: string) => void;
+  onAdd: () => void;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
+}) {
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Catalog / Stock</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">
+            Products <span className="text-black/30">({products.length})</span>
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-2 self-start rounded-md bg-orange-500 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400"
+        >
+          <CirclePlus size={15} /> Add New Product
+        </button>
+      </div>
+
+      <div className="mt-6 flex items-center gap-3 rounded-lg bg-white px-4 border border-black/10">
+        <Search size={17} className="text-black/40" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search products by name, SKU, or category..."
+          className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-black/30"
+        />
+      </div>
+
+      <div className="mt-5 overflow-x-auto rounded-lg bg-white border border-black/10 shadow-sm">
+        <table className="w-full min-w-[700px] text-left">
+          <thead className="border-b border-black/10 bg-[#fafafa] font-mono text-[9px] uppercase tracking-[0.13em] text-black/40">
+            <tr>
+              <th className="px-5 py-4">Product Details</th>
+              <th className="px-5 py-4">SKU</th>
+              <th className="px-5 py-4">Price</th>
+              <th className="px-5 py-4">Stock</th>
+              <th className="px-5 py-4">Status</th>
+              <th className="px-5 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((product) => (
+              <tr key={product.id} className="border-b border-black/[0.06] last:border-0 hover:bg-black/[0.01]">
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded bg-[#111416] overflow-hidden flex items-center justify-center shrink-0">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt="" className="size-full object-cover" />
+                      ) : (
+                        <span className="font-mono text-[9px] text-orange-400 font-bold uppercase">
+                          {product.image.slice(0, 4)}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-black">{product.name}</p>
+                      <p className="text-xs text-black/40">{product.category}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-5 py-4 font-mono text-xs text-black/50">{product.sku}</td>
+                <td className="px-5 py-4 font-mono text-sm font-semibold">{formatINR(product.price)}</td>
+                <td className="px-5 py-4">
+                  <span
+                    className={`font-mono text-xs font-bold ${
+                      (product.stock || 0) <= (product.lowStockThreshold || 5) ? "text-red-600" : "text-emerald-700"
+                    }`}
+                  >
+                    {product.stock || 0} units
+                  </span>
+                </td>
+                <td className="px-5 py-4">
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-emerald-800">
+                    {product.stockStatus || "Active"}
+                  </span>
+                </td>
+                <td className="px-5 py-4 text-right">
+                  <div className="inline-flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(product)}
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] font-semibold text-black/60 hover:text-orange-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(product)}
+                      className="text-black/30 hover:text-red-600"
+                      title="Hide product"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function OrdersAdmin({
+  orders,
+  onVerify,
+  onReject,
+  onTransition,
+  onOverrideAmount,
+  onGenerateInvoice,
+  onViewInvoice,
+  busy,
+}: {
+  orders: any[];
+  onVerify: (id: number, reference?: string) => void;
+  onReject: (id: number) => void;
+  onTransition: (id: number, status: "PAYMENT_PENDING" | "ORDER_CONFIRMED" | "PACKED" | "SHIPPED" | "DELIVERED" | "CANCELLED") => void;
+  onOverrideAmount: (id: number, finalAmount: number, reason?: string) => void;
+  onGenerateInvoice: (id: number) => void;
+  onViewInvoice: (order: any) => void;
+  busy: boolean;
+}) {
+  const [filter, setFilter] = useState("ALL");
+
+  const filteredOrders = useMemo(() => {
+    if (filter === "ALL") return orders;
+    return orders.filter((o) => o.status === filter);
+  }, [orders, filter]);
+
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Ledger / State Machine</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">
+            Customer Orders <span className="text-black/30">({orders.length})</span>
+          </h2>
+        </div>
+        <p className="max-w-xs text-right text-xs leading-5 text-black/50">
+          Enquiries made on WhatsApp are logged here. Admin manages payment verification, stock deduction, and invoice generation.
+        </p>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+        {["ALL", "ORDER_REQUESTED", "PAYMENT_PENDING", "ORDER_CONFIRMED", "PACKED", "SHIPPED", "DELIVERED", "CANCELLED"].map(
+          (st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setFilter(st)}
+              className={`rounded-full px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] transition-colors ${
+                filter === st ? "bg-black text-white font-bold" : "bg-white text-black/60 border border-black/10 hover:bg-black/5"
+              }`}
+            >
+              {st.replaceAll("_", " ")}
+            </button>
+          )
+        )}
+      </div>
+
+      <div className="mt-6 grid gap-4">
+        {filteredOrders.length ? (
+          filteredOrders.map((order) => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              onVerify={onVerify}
+              onReject={onReject}
+              onTransition={onTransition}
+              onOverrideAmount={onOverrideAmount}
+              onGenerateInvoice={onGenerateInvoice}
+              onViewInvoice={onViewInvoice}
+              busy={busy}
+            />
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-black/15 bg-white p-10 text-center text-sm text-black/50">
+            No orders found under <strong>{filter}</strong>.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderCard({
+  order,
+  onVerify,
+  onReject,
+  onTransition,
+  onOverrideAmount,
+  onGenerateInvoice,
+  onViewInvoice,
+  busy,
+}: {
+  order: any;
+  onVerify: (id: number, reference?: string) => void;
+  onReject: (id: number) => void;
+  onTransition: (id: number, status: any) => void;
+  onOverrideAmount: (id: number, finalAmount: number, reason?: string) => void;
+  onGenerateInvoice: (id: number) => void;
+  onViewInvoice: (order: any) => void;
+  busy: boolean;
+}) {
+  const [reference, setReference] = useState("");
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [overridePrice, setOverridePrice] = useState(String(order.finalAmount || order.total));
+  const [overrideReason, setOverrideReason] = useState("");
+
+  const handleSavePrice = () => {
+    const val = Number(overridePrice);
+    if (!val || val <= 0) return;
+    onOverrideAmount(order.id, val, overrideReason);
+    setEditingPrice(false);
+  };
+
+  const statusColors: Record<string, string> = {
+    ORDER_REQUESTED: "bg-blue-100 text-blue-800",
+    PAYMENT_PENDING: "bg-amber-100 text-amber-800",
+    ORDER_CONFIRMED: "bg-emerald-100 text-emerald-800",
+    PACKED: "bg-purple-100 text-purple-800",
+    SHIPPED: "bg-indigo-100 text-indigo-800",
+    DELIVERED: "bg-green-100 text-green-800",
+    PAYMENT_REJECTED: "bg-red-100 text-red-800",
+    CANCELLED: "bg-gray-100 text-gray-700",
+  };
+
+  return (
+    <article className="rounded-lg border border-black/10 bg-white p-5 md:p-6 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start border-b border-black/[0.06] pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm font-bold text-orange-600">
+              {order.orderNumber || `HAI-ORDER-${order.id}`}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider ${
+                statusColors[order.status] || "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {order.status.replaceAll("_", " ")}
+            </span>
+            {order.amountOverridden === 1 && (
+              <span className="rounded bg-amber-500/10 text-amber-700 px-2 py-0.5 font-mono text-[9px] font-bold uppercase">
+                Price Negotiated
+              </span>
+            )}
+          </div>
+          <h3 className="mt-2 font-display text-xl font-bold text-black">{order.customerName}</h3>
+          <p className="mt-1 text-xs text-black/60 font-mono">
+            📞 {order.phone} · 📍 {order.address}
+          </p>
+        </div>
+
+        <div className="text-left md:text-right">
+          <p className="font-mono text-2xl font-bold text-orange-600">
+            {formatINR(order.finalAmount || order.total)}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase text-black/40">
+            {new Date(order.createdAt).toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      {/* Items Breakdown */}
+      <div className="mt-4 grid gap-2 py-2">
+        {(order.items || []).map((item: any) => (
+          <div key={item.id} className="flex justify-between text-sm py-1 border-b border-black/[0.03]">
+            <span>
+              {item.productName} <span className="text-black/40 font-mono">({item.sku})</span> × {item.quantity}
+            </span>
+            <span className="font-mono font-medium">{formatINR(item.lineTotal)}</span>
+          </div>
+        ))}
+        <div className="mt-2 flex justify-between font-mono text-xs text-black/60 pt-2 border-t border-black/10">
+          <span>Subtotal + Shipping ({formatINR(order.shipping || 50)})</span>
+          <span>
+            {formatINR(order.subtotal || order.total - 50)} + {formatINR(order.shipping || 50)} ={" "}
+            <strong>{formatINR(order.calculatedAmount || order.total)}</strong>
+          </span>
+        </div>
+      </div>
+
+      {/* Actions Toolbar */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4">
+        {/* Left: WhatsApp chat link & Invoice button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={whatsappLink(`Hi ${order.customerName}, regarding your HAIDRONICS order ${order.orderNumber}:`, order.phone)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 font-mono text-[10px] font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            <MessageCircle size={14} /> WhatsApp Customer
+          </a>
+
+          {order.invoiceId ? (
+            <button
+              type="button"
+              onClick={() => onViewInvoice(order)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-black/15 bg-black/5 px-3 py-1.5 font-mono text-[10px] font-bold text-black hover:bg-black hover:text-white"
+            >
+              <FileText size={14} /> View Invoice ({order.invoiceId})
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onGenerateInvoice(order.id)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-black/15 px-3 py-1.5 font-mono text-[10px] font-bold text-black hover:bg-orange-500 hover:border-orange-500"
+            >
+              <FileText size={14} /> Generate Invoice
+            </button>
+          )}
+
+          {/* Negotiate price toggle */}
+          {!editingPrice ? (
+            <button
+              type="button"
+              onClick={() => setEditingPrice(true)}
+              className="inline-flex items-center gap-1 font-mono text-[10px] text-black/50 hover:text-orange-600 underline"
+            >
+              <Edit2 size={12} /> Override Amount
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 bg-[#f7f8f8] p-2 rounded border border-black/10">
+              <input
+                type="number"
+                value={overridePrice}
+                onChange={(e) => setOverridePrice(e.target.value)}
+                className="h-8 w-24 rounded border border-black/20 bg-white px-2 text-xs font-mono"
+              />
+              <input
+                placeholder="Reason (optional)"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                className="h-8 w-32 rounded border border-black/20 bg-white px-2 text-xs"
+              />
+              <button
+                type="button"
+                onClick={handleSavePrice}
+                className="rounded bg-black px-2.5 py-1.5 font-mono text-[9px] text-white font-bold"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingPrice(false)}
+                className="font-mono text-[9px] text-black/40"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: State Machine Transitions */}
+        <div className="flex flex-wrap items-center gap-2">
+          {order.status === "ORDER_REQUESTED" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onTransition(order.id, "PAYMENT_PENDING")}
+              className="rounded-md bg-black px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-white hover:bg-orange-600"
+            >
+              Mark Payment Pending
+            </button>
+          )}
+
+          {order.status === "PAYMENT_PENDING" && (
+            <div className="flex items-center gap-2">
+              <input
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="UPI Ref (optional)"
+                className="h-9 w-36 rounded border border-black/15 bg-[#f7f8f8] px-2.5 text-xs outline-none focus:border-orange-500"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onVerify(order.id, reference || undefined)}
+                className="rounded-md bg-emerald-600 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-white hover:bg-emerald-500"
+              >
+                Verify Payment & Deduct Stock
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onReject(order.id)}
+                className="rounded-md border border-red-200 px-3 py-2 font-mono text-[10px] uppercase text-red-600 hover:bg-red-50"
+              >
+                Reject
+              </button>
+            </div>
+          )}
+
+          {order.status === "ORDER_CONFIRMED" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onTransition(order.id, "PACKED")}
+              className="rounded-md bg-purple-600 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-white hover:bg-purple-500"
+            >
+              Mark as Packed
+            </button>
+          )}
+
+          {order.status === "PACKED" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onTransition(order.id, "SHIPPED")}
+              className="rounded-md bg-indigo-600 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-white hover:bg-indigo-500"
+            >
+              Mark as Shipped
+            </button>
+          )}
+
+          {order.status === "SHIPPED" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onTransition(order.id, "DELIVERED")}
+              className="rounded-md bg-green-700 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-white hover:bg-green-600"
+            >
+              Mark as Delivered
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function InventoryAdmin({
+  products,
+  movements,
+  restockDraft,
+  setRestockDraft,
+  onRestock,
+  busy,
+}: {
+  products: Product[];
+  movements: any[];
+  restockDraft: Record<string, string>;
+  setRestockDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onRestock: (product: Product) => void;
+  busy: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Stock Control / Ledger</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">Inventory & Movement Trail</h2>
+        </div>
+        <p className="max-w-xs text-right text-xs leading-5 text-black/50">
+          Payment confirmation automatically deducts units and prevents overselling. Restocks are logged with audit reasons.
+        </p>
+      </div>
+
+      <div className="mt-6 overflow-x-auto rounded-lg bg-white border border-black/10 shadow-sm">
+        <table className="w-full min-w-[700px] text-left">
+          <thead className="border-b border-black/10 bg-[#fafafa] font-mono text-[9px] uppercase tracking-[0.13em] text-black/40">
+            <tr>
+              <th className="px-5 py-4">Component</th>
+              <th className="px-5 py-4">SKU</th>
+              <th className="px-5 py-4">Current Stock</th>
+              <th className="px-5 py-4">Threshold</th>
+              <th className="px-5 py-4">Quick Restock</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((product) => (
+              <tr key={product.id} className="border-b border-black/[0.06] last:border-0 hover:bg-black/[0.01]">
+                <td className="px-5 py-4 font-medium">{product.name}</td>
+                <td className="px-5 py-4 font-mono text-xs text-black/50">{product.sku}</td>
+                <td className="px-5 py-4">
+                  <span
+                    className={`font-mono text-sm font-bold ${
+                      (product.stock || 0) <= (product.lowStockThreshold || 5) ? "text-red-600" : "text-emerald-700"
+                    }`}
+                  >
+                    {product.stock || 0}
+                  </span>
+                </td>
+                <td className="px-5 py-4 font-mono text-xs text-black/40">{product.lowStockThreshold || 5}</td>
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Qty"
+                      value={restockDraft[String(product.dbId)] || ""}
+                      onChange={(e) =>
+                        setRestockDraft((cur) => ({ ...cur, [String(product.dbId)]: e.target.value }))
+                      }
+                      className="h-9 w-20 rounded border border-black/15 bg-[#f7f8f8] px-2 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !product.dbId}
+                      onClick={() => onRestock(product)}
+                      className="rounded-md bg-orange-500 px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-black hover:bg-orange-400 disabled:opacity-50"
+                    >
+                      + Restock
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-8">
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600 font-semibold">
+          Movement History (Last 300 Events)
+        </p>
+        <div className="mt-3 grid gap-2">
+          {movements.slice(0, 15).map((row: any) => (
+            <div
+              key={row.movement.id}
+              className="flex flex-wrap justify-between items-center gap-3 rounded-md bg-white border border-black/[0.06] px-4 py-3 text-sm"
+            >
+              <div>
+                <span className="font-medium">{row.productName || "Product"}</span> ·{" "}
+                <span className="font-mono text-xs text-black/50 uppercase">{row.movement.reason}</span>
+                {row.movement.note && <span className="text-xs text-black/40 ml-2">({row.movement.note})</span>}
+              </div>
+              <div className="flex items-center gap-4">
+                <span
+                  className={`font-mono text-sm font-bold ${
+                    row.movement.change > 0 ? "text-emerald-700" : "text-red-600"
+                  }`}
+                >
+                  {row.movement.change > 0 ? `+${row.movement.change}` : row.movement.change}
+                </span>
+                <span className="font-mono text-[10px] text-black/35">
+                  {new Date(row.movement.createdAt).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportsAdmin({
+  metrics,
+  products,
+  orders,
+  inventory,
+  transactions,
+}: {
+  metrics?: { orders: number; pendingPayments: number; lowStock: number; todaySales: number; revenue: number };
+  products: Product[];
+  orders: any[];
+  inventory: any[];
+  transactions: any[];
+}) {
+  const exportOrdersCSV = () => {
+    const headers = "OrderNumber,CustomerName,Phone,Address,Status,PaymentStatus,CalculatedAmount,FinalAmount,Date\n";
+    const rows = orders
+      .map(
+        (o) =>
+          `"${o.orderNumber}","${o.customerName}","${o.phone}","${o.address.replace(/"/g, '""')}","${o.status}","${o.paymentStatus}",${o.calculatedAmount},${o.finalAmount},"${new Date(o.createdAt).toISOString()}"`
+      )
+      .join("\n");
+    downloadFile(headers + rows, `haidronics_orders_${Date.now()}.csv`);
+  };
+
+  const exportInventoryCSV = () => {
+    const headers = "ProductName,SKU,Category,CurrentStock,LowStockThreshold,Price\n";
+    const rows = products
+      .map(
+        (p) =>
+          `"${p.name}","${p.sku}","${p.category}",${p.stock || 0},${p.lowStockThreshold || 5},${p.price}`
+      )
+      .join("\n");
+    downloadFile(headers + rows, `haidronics_inventory_${Date.now()}.csv`);
+  };
+
+  const exportTransactionsCSV = () => {
+    const headers = "TransactionID,OrderNumber,Amount,Type,Status,Date\n";
+    const rows = transactions
+      .map(
+        (t) =>
+          `${t.transaction.id},"${t.orderNumber}",${t.transaction.amount},"${t.transaction.type}","${t.transaction.paymentStatus}","${new Date(t.transaction.createdAt).toISOString()}"`
+      )
+      .join("\n");
+    downloadFile(headers + rows, `haidronics_transactions_${Date.now()}.csv`);
+  };
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Downloaded ${filename}`);
+  };
+
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Analytics & Exports</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">Business Reports & Downloads</h2>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Total Orders" value={String(metrics?.orders || 0)} />
+        <MetricCard label="Pending Payments" value={String(metrics?.pendingPayments || 0)} accent="amber" />
+        <MetricCard label="Low Stock Items" value={String(metrics?.lowStock || 0)} accent="red" />
+        <MetricCard label="Verified Revenue" value={formatINR(metrics?.revenue || 0)} accent="green" />
+      </div>
+
+      {/* Export Buttons */}
+      <div className="mt-8 rounded-lg bg-white p-6 border border-black/10 shadow-sm">
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600 font-bold">
+          One-Click Data Export
+        </p>
+        <p className="mt-1 text-sm text-black/60">
+          Download CSV and Excel compatible spreadsheets for billing, accounting, and inventory audits.
+        </p>
+
+        <div className="mt-6 flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={exportOrdersCSV}
+            className="inline-flex items-center gap-2 rounded-md bg-black px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-white hover:bg-orange-600 transition-colors"
+          >
+            <Download size={15} /> Export Orders CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportInventoryCSV}
+            className="inline-flex items-center gap-2 rounded-md border border-black/20 bg-white px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-black hover:text-white transition-colors"
+          >
+            <Download size={15} /> Export Inventory CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportTransactionsCSV}
+            className="inline-flex items-center gap-2 rounded-md border border-black/20 bg-white px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-black hover:text-white transition-colors"
+          >
+            <Download size={15} /> Export Transactions CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComboKitsAdmin({
+  kits,
+  products,
+  onAdd,
+  onDelete,
+}: {
+  kits: ComboKit[];
+  products: Product[];
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Curated Bundles</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">
+            Combo Kits <span className="text-black/30">({kits.length})</span>
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-2 self-start rounded-md bg-orange-500 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400"
+        >
+          <Layers3 size={15} /> Create Combo Kit
+        </button>
+      </div>
+      <p className="mt-3 text-sm text-black/60">
+        Created kits automatically display on storefront and matching product pages under "Start with the kit".
+      </p>
+
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
+        {kits.length ? (
+          kits.map((kit) => (
+            <div key={kit.id} className="relative rounded-lg border border-black/10 bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="rounded bg-orange-100 text-orange-800 px-2 py-0.5 font-mono text-[9px] font-bold uppercase">
+                    Featured Bundle
+                  </span>
+                  <h3 className="mt-2 font-display text-2xl font-bold">{kit.name}</h3>
+                  <p className="mt-1 text-sm text-black/50">{kit.tagline}</p>
+                </div>
+                <p className="font-mono text-xl font-bold text-orange-600">{formatINR(kit.price)}</p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {kit.items.map((item) => (
+                  <span key={item.productSlug} className="rounded-full bg-black/5 px-2.5 py-1 font-mono text-[9px] text-black/70">
+                    {item.quantity}× {products.find((p) => p.id === item.productSlug)?.name || item.productSlug}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-black/10 pt-4">
+                <span className="font-mono text-xs text-black/40">{kit.items.length} items bundled</span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(kit.id)}
+                  className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-black/40 hover:text-red-600"
+                >
+                  <Trash2 size={13} /> Remove Kit
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/50">
+            No combo kits published yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TransactionsAdmin({ rows }: { rows: any[] }) {
+  return (
+    <SimpleLedger
+      title="Verified Transactions"
+      eyebrow="Finance & Payments"
+      rows={rows.map((row) => ({
+        id: row.transaction.id,
+        primary: row.orderNumber || `Order #${row.transaction.orderId}`,
+        secondary: `${row.transaction.type} · ${row.transaction.paymentStatus}`,
+        amount: formatINR(row.transaction.amount),
+        date: row.transaction.createdAt,
+      }))}
+      empty="Verified transactions will appear here once orders are confirmed."
+    />
+  );
+}
+
+function AuditAdmin({ rows }: { rows: any[] }) {
+  return (
+    <SimpleLedger
+      title="Audit Trail"
+      eyebrow="Security & Governance"
+      rows={rows.map((row) => ({
+        id: row.log.id,
+        primary: row.log.action,
+        secondary: `${row.adminName || "Admin"} · ${row.log.entityType || "System"} #${row.log.entityId || "—"} (${
+          row.log.details || ""
+        })`,
+        amount: "",
+        date: row.log.createdAt,
+      }))}
+      empty="Sensitive actions (price changes, payment confirmations, restocks) will log here."
+    />
+  );
+}
+
+function SimpleLedger({
+  title,
+  eyebrow,
+  rows,
+  empty,
+}: {
+  title: string;
+  eyebrow: string;
+  rows: Array<{ id: number; primary: string; secondary: string; amount: string; date: Date | string }>;
+  empty: string;
+}) {
+  return (
+    <div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">{eyebrow}</p>
+      <h2 className="mt-1 font-display text-3xl font-bold">
+        {title} <span className="text-black/30">({rows.length})</span>
+      </h2>
+      <div className="mt-6 grid gap-2.5">
+        {rows.length ? (
+          rows.map((row) => (
+            <div
+              key={row.id}
+              className="flex flex-col justify-between gap-3 rounded-lg bg-white p-4 border border-black/[0.06] md:flex-row md:items-center shadow-sm"
+            >
+              <div>
+                <p className="font-display text-base font-bold text-black">{row.primary}</p>
+                <p className="mt-0.5 text-xs text-black/50">{row.secondary}</p>
+              </div>
+              <div className="text-left md:text-right">
+                {row.amount && <p className="font-mono text-base font-bold text-orange-600">{row.amount}</p>}
+                <p className="font-mono text-[10px] uppercase text-black/35">{new Date(row.date).toLocaleString()}</p>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/50">
+            {empty}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Requests({
+  data,
+}: {
+  data?: {
+    projects: Array<{ id: number; name: string; projectName: string | null; budget: string | null; createdAt: Date }>;
+    products: Array<{ id: number; component: string; quantity: number; createdAt: Date }>;
+  };
+}) {
+  const items = [
+    ...(data?.projects || []).map((item) => ({
+      type: "PROJECT SUPPORT",
+      title: item.projectName || "Project Brief",
+      meta: `${item.name} · ${item.budget || "Budget not specified"}`,
+      date: item.createdAt,
+    })),
+    ...(data?.products || []).map((item) => ({
+      type: "PRODUCT REQUEST",
+      title: item.component,
+      meta: `Quantity · ${item.quantity}`,
+      date: item.createdAt,
+    })),
+  ];
+
+  return (
+    <div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Inbox / Forms</p>
+      <h2 className="mt-1 font-display text-3xl font-bold">Customer Requests ({items.length})</h2>
+      <div className="mt-6 grid gap-3">
+        {items.length ? (
+          items.map((item, index) => (
+            <div key={index} className="flex flex-col justify-between gap-4 rounded-lg bg-white p-5 border border-black/[0.06] sm:flex-row sm:items-center shadow-sm">
+              <div>
+                <span className="font-mono text-[9px] uppercase tracking-wider font-bold text-orange-600">{item.type}</span>
+                <p className="mt-1 font-display text-lg font-bold">{item.title}</p>
+                <p className="text-xs text-black/50">{item.meta}</p>
+              </div>
+              <span className="font-mono text-[10px] text-black/35">{new Date(item.date).toLocaleString()}</span>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/50">
+            No customer requests submitted yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Analytics({ data }: { data?: Array<{ event: string; createdAt: Date }> }) {
+  const counts = (data || []).reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.event]: (acc[item.event] || 0) + 1 }), {});
+  return (
+    <div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Telemetry / Storefront</p>
+      <h2 className="mt-1 font-display text-3xl font-bold">Customer Activity</h2>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <MetricCard label="Total Tracked Events" value={String(data?.length || 0)} />
+        <MetricCard label="WhatsApp Conversions" value={String(counts.whatsapp_click || 0)} accent="green" />
+        <MetricCard label="Product Views" value={String(counts.product_view || 0)} accent="amber" />
+      </div>
+    </div>
+  );
+}
+
+function Settings({
+  settings,
+  setSettings,
+  onSave,
+  saving,
+}: {
+  settings: SettingsForm;
+  setSettings: React.Dispatch<React.SetStateAction<SettingsForm>>;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const fields: Array<[keyof SettingsForm, string]> = [
+    ["businessName", "Business Name"],
+    ["whatsappNumber", "Business WhatsApp Number (e.g. 918248453861)"],
+    ["phone", "Direct Phone"],
+    ["email", "Official Email"],
+    ["instagramUrl", "Instagram Profile URL"],
+    ["youtubeUrl", "YouTube Channel URL"],
+    ["address", "Store / Dispatch Address"],
+    ["businessHours", "Working Hours"],
+    ["mapsUrl", "Google Maps Location URL"],
+    ["shippingFee", "Standard Shipping Fee (INR)"],
+  ];
+
+  return (
+    <div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">System Configuration</p>
+      <h2 className="mt-1 font-display text-3xl font-bold">Business Settings</h2>
+      <div className="mt-6 max-w-2xl rounded-xl bg-white p-6 md:p-8 border border-black/10 shadow-sm">
+        <div className="grid gap-4">
+          {fields.map(([key, label]) => (
+            <label key={key} className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">{label}</span>
+              <input
+                type={key === "email" ? "email" : key === "shippingFee" ? "number" : key.endsWith("Url") ? "url" : "text"}
+                value={settings[key]}
+                onChange={(e) => setSettings((cur) => ({ ...cur, [key]: e.target.value }))}
+                className="h-11 w-full rounded-md border border-black/15 bg-[#f7f8f8] px-3.5 text-sm text-black outline-none focus:border-orange-500 focus:bg-white"
+              />
+            </label>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="mt-8 inline-flex items-center gap-2 rounded-md bg-black px-6 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+        >
+          {saving && <Loader2 size={13} className="animate-spin" />} Save Business Settings
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, accent = "orange" }: { label: string; value: string; accent?: string }) {
+  const color =
+    accent === "red"
+      ? "text-red-600"
+      : accent === "green"
+      ? "text-emerald-700"
+      : accent === "amber"
+      ? "text-amber-700"
+      : "text-orange-600";
+  return (
+    <div className="rounded-lg border border-black/[0.08] bg-white p-5 shadow-sm">
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/40 font-semibold">{label}</p>
+      <p className={`mt-2 font-display text-3xl font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function AddProductModal({
+  product,
+  setProduct,
+  onClose,
+  onSave,
+  saving,
+  editing = false,
+  uploadError,
+}: {
+  product: ProductDraft;
+  setProduct: (value: React.SetStateAction<ProductDraft>) => void;
+  onClose: () => void;
+  onSave: () => void;
+  saving: boolean;
+  editing?: boolean;
+  uploadError?: string;
+}) {
+  const update = (patch: Partial<ProductDraft>) =>
+    setProduct((cur) => ({ ...(cur || product), ...patch } as ProductDraft));
+
   const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const source = new Image();
-      source.onload = () => {
-        const max = 1600;
-        const scale = Math.min(1, max / Math.max(source.width, source.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(source.width * scale));
-        canvas.height = Math.max(1, Math.round(source.height * scale));
-        canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
-        update({ image: { filename: file.name.replace(/\.[^.]+$/, "") + ".jpg", contentType: "image/jpeg", base64: canvas.toDataURL("image/jpeg", 0.86) } });
-      };
-      source.src = String(reader.result);
+      update({
+        image: {
+          filename: file.name,
+          contentType: file.type || "image/jpeg",
+          base64: String(reader.result),
+        },
+        imageUrl: String(reader.result), // preview instantly
+      });
     };
     reader.readAsDataURL(file);
   };
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-5"><div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-sm bg-white p-6 shadow-2xl md:p-8"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600">Catalog editor</p><h2 className="mt-2 font-display text-3xl">{editing ? "Edit product" : "Add a product"}</h2></div><button type="button" onClick={onClose} className="text-black/35 hover:text-black"><X size={19} /></button></div><div className="mt-7 grid gap-4"><AdminField label="Product name" value={product.name} onChange={(value) => update({ name: value })} /><div className="grid gap-4 sm:grid-cols-2"><AdminField label="SKU" value={product.sku} onChange={(value) => update({ sku: value })} /><AdminField label="Price (INR)" type="number" value={product.price} onChange={(value) => update({ price: value })} /></div><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">Category</span><select value={product.category} onChange={(event) => update({ category: event.target.value })} className="h-11 w-full rounded-sm border border-black/15 bg-white px-3 text-sm outline-none focus:border-orange-500"><option>Modules</option><option>Development boards</option><option>Sensors</option><option>Displays</option></select></label><label className="block"><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">Availability</span><select value={product.stockStatus} onChange={(event) => update({ stockStatus: event.target.value as ProductDraft["stockStatus"] })} className="h-11 w-full rounded-sm border border-black/15 bg-white px-3 text-sm outline-none focus:border-orange-500"><option>In stock</option><option>Limited</option><option>Out of stock</option></select></label></div><div className="grid gap-4 sm:grid-cols-2"><AdminField label="Current stock" type="number" value={product.stock} onChange={(value) => update({ stock: value })} /><AdminField label="Low-stock threshold" type="number" value={product.lowStockThreshold} onChange={(value) => update({ lowStockThreshold: value })} /></div><AdminField label="Short description" value={product.shortDescription} onChange={(value) => update({ shortDescription: value })} /><AdminField label="Description" value={product.description} onChange={(value) => update({ description: value })} /><label className="block"><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">Product photo</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile} className="block w-full rounded-sm border border-dashed border-black/20 bg-[#f7f8f8] p-3 text-xs" />{product.image && <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-700">Ready to upload: {product.image.filename}</p>}{uploadError && <p className="mt-2 text-xs leading-5 text-red-600">Image upload failed: {uploadError}</p>}{product.imageUrl && !product.image && <img src={product.imageUrl} alt="Current product" className="mt-3 h-24 w-32 rounded object-cover" />}</label><label className="flex items-center gap-2"><input type="checkbox" checked={product.featured} onChange={(event) => update({ featured: event.target.checked })} className="accent-orange-500" /><span className="font-mono text-[10px] uppercase tracking-[0.12em] text-black/50">Featured collection</span></label></div><div className="mt-7 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.13em] text-black/45">Cancel</button><button type="button" onClick={onSave} disabled={saving || !product.name || !product.price} className="inline-flex items-center gap-2 rounded-sm bg-orange-500 px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black disabled:opacity-50">{saving && <Loader2 size={13} className="animate-spin" />} {editing ? "Save changes" : "Save product"}</button></div></div></div>; }
-function AdminField({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="block"><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full rounded-sm border border-black/15 bg-white px-3 text-sm outline-none focus:border-orange-500" /></label>; }
 
-function ComboKitsAdmin({ kits, products, onAdd, onDelete }: { kits: ComboKit[]; products: Product[]; onAdd: () => void; onDelete: (id: number) => void }) { return <div><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Catalog / curated bundles</p><h2 className="mt-2 font-display text-4xl">Combo kits <span className="text-black/25">/ {kits.length}</span></h2></div><button type="button" onClick={onAdd} className="inline-flex items-center gap-2 self-start rounded-sm bg-orange-500 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><Layers3 size={15} /> Add combo kit</button></div><p className="mt-4 max-w-2xl text-sm leading-6 text-black/50">Select products, publish a bundle, and it will appear automatically on matching product pages under “Start with the kit”.</p><div className="mt-8 grid gap-5 md:grid-cols-2">{kits.length ? kits.map((kit) => <div key={kit.id} className="relative overflow-hidden rounded-sm border border-black/10 bg-white p-6"><div className="absolute right-5 top-5 text-orange-500"><Layers3 size={19} /></div><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-orange-600">featured bundle</p><h3 className="mt-3 max-w-[80%] font-display text-2xl">{kit.name}</h3><p className="mt-2 text-sm text-black/45">{kit.tagline}</p><div className="mt-5 flex flex-wrap gap-2">{kit.items.map((item) => <span key={item.productSlug} className="rounded-full bg-black/5 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-black/55">{item.quantity} × {products.find((product) => product.id === item.productSlug)?.name || item.productSlug}</span>)}</div><div className="mt-6 flex items-center justify-between border-t border-black/10 pt-4"><span className="font-mono text-sm text-orange-700">{formatINR(kit.price)}</span><button type="button" onClick={() => onDelete(kit.id)} className="inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.13em] text-black/35 hover:text-red-600"><Trash2 size={14} /> Hide</button></div></div>) : <div className="rounded-sm border border-dashed border-black/15 bg-white p-8 text-sm text-black/45">No combo kits yet. Create the first bundle from the catalog.</div>}</div></div>; }
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl md:p-8">
+        <div className="flex items-start justify-between border-b border-black/10 pb-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600 font-bold">Catalog Management</p>
+            <h2 className="mt-1 font-display text-2xl font-bold">{editing ? "Edit Product" : "Add New Product"}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-black/40 hover:text-black">
+            <X size={20} />
+          </button>
+        </div>
 
-function AddComboModal({ combo, setCombo, products, onClose, onSave, saving }: { combo: { name: string; tagline: string; description: string; price: string; productSlugs: string[] }; setCombo: React.Dispatch<React.SetStateAction<{ name: string; tagline: string; description: string; price: string; productSlugs: string[] }>>; products: Product[]; onClose: () => void; onSave: () => void; saving: boolean }) { const toggle = (slug: string) => setCombo((current) => ({ ...current, productSlugs: current.productSlugs.includes(slug) ? current.productSlugs.filter((item) => item !== slug) : [...current.productSlugs, slug] })); return <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-5"><div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-sm bg-white p-6 shadow-2xl md:p-8"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600">Bundle editor</p><h2 className="mt-2 font-display text-3xl">Create a combo kit</h2></div><button type="button" onClick={onClose} className="text-black/35 hover:text-black"><X size={19} /></button></div><div className="mt-7 grid gap-4"><AdminField label="Kit name" value={combo.name} onChange={(value) => setCombo({ ...combo, name: value })} /><div className="grid gap-4 sm:grid-cols-2"><AdminField label="Kit price (INR)" type="number" value={combo.price} onChange={(value) => setCombo({ ...combo, price: value })} /><AdminField label="Tagline" value={combo.tagline} onChange={(value) => setCombo({ ...combo, tagline: value })} /></div><AdminField label="Description" value={combo.description} onChange={(value) => setCombo({ ...combo, description: value })} /><div><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">Choose products in this kit</span><div className="grid max-h-56 gap-2 overflow-y-auto rounded-sm border border-black/10 bg-[#f7f8f8] p-2">{products.map((product) => <label key={product.id} className={`flex cursor-pointer items-center gap-3 rounded-sm px-3 py-2.5 transition-colors ${combo.productSlugs.includes(product.id) ? "bg-orange-100" : "hover:bg-black/5"}`}><input type="checkbox" checked={combo.productSlugs.includes(product.id)} onChange={() => toggle(product.id)} className="accent-orange-500" /><span className="text-sm">{product.name}</span><span className="ml-auto font-mono text-[9px] text-black/35">{product.sku}</span></label>)}</div><p className="mt-2 font-mono text-[9px] uppercase tracking-[0.12em] text-black/35">{combo.productSlugs.length} products selected</p></div></div><div className="mt-7 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.13em] text-black/45">Cancel</button><button type="button" onClick={onSave} disabled={saving || !combo.name || !combo.price || combo.productSlugs.length === 0} className="inline-flex items-center gap-2 rounded-sm bg-orange-500 px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black disabled:opacity-50">{saving && <Loader2 size={13} className="animate-spin" />} Publish kit</button></div></div></div>; }
+        <div className="mt-6 grid gap-4">
+          <label className="block">
+            <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Product Name *</span>
+            <input
+              value={product.name}
+              onChange={(e) => update({ name: e.target.value })}
+              className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500"
+            />
+          </label>
 
-function CustomerStoriesAdmin({ stories, onAdd, onDelete }: { stories: CustomerStoryAdmin[]; onAdd: () => void; onDelete: (id: number) => void }) { return <div><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Homepage / customer proof</p><h2 className="mt-2 font-display text-4xl">Builds in the wild <span className="text-black/25">/{stories.length}</span></h2></div><button type="button" onClick={onAdd} className="inline-flex items-center gap-2 self-start rounded-sm bg-orange-500 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><Images size={15} /> Add customer build</button></div><div className="mt-4 max-w-2xl rounded-sm border border-orange-500/20 bg-orange-50 p-4 text-sm leading-6 text-black/55">Only publish customer photos and names when you have permission. You can also use project-only photos with no face or personal details.</div><div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{stories.length ? stories.map((story) => <article key={story.id} className="overflow-hidden rounded-sm border border-black/10 bg-white">{story.imageUrl ? <img src={story.imageUrl} alt={story.title} className="h-44 w-full object-cover" /> : <div className="grid h-44 place-items-center bg-[#111416] text-white/35"><Images size={28} /></div>}<div className="p-5"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-orange-600">{story.projectType || "customer build"}</p><h3 className="mt-2 font-display text-2xl">{story.title}</h3>{story.customerName && <p className="mt-2 text-sm text-black/45">{story.customerName}</p>}{story.caption && <p className="mt-3 text-sm leading-6 text-black/55">{story.caption}</p>}<button type="button" onClick={() => onDelete(story.id)} className="mt-5 inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.13em] text-black/35 hover:text-red-600"><Trash2 size={14} /> Hide from site</button></div></article>) : <div className="rounded-sm border border-dashed border-black/15 bg-white p-8 text-sm text-black/45">No customer builds yet. Add a project photo, a short title, and an approved caption to feature it on the homepage.</div>}</div></div>; }
-function AddCustomerStoryModal({ story, setStory, onClose, onSave, saving, uploadError }: { story: CustomerStoryDraft; setStory: React.Dispatch<React.SetStateAction<CustomerStoryDraft>>; onClose: () => void; onSave: () => void; saving: boolean; uploadError?: string }) { const update = (patch: Partial<CustomerStoryDraft>) => setStory((current) => ({ ...current, ...patch })); const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return; const reader = new FileReader(); reader.onload = () => { const source = new Image(); source.onload = () => { const max = 1600; const scale = Math.min(1, max / Math.max(source.width, source.height)); const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(source.width * scale)); canvas.height = Math.max(1, Math.round(source.height * scale)); canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height); update({ image: { filename: file.name.replace(/\.[^.]+$/, "") + ".jpg", contentType: "image/jpeg", base64: canvas.toDataURL("image/jpeg", 0.86) } }); }; source.src = String(reader.result); }; reader.readAsDataURL(file); }; return <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-5"><div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-sm bg-white p-6 shadow-2xl md:p-8"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600">Homepage evidence</p><h2 className="mt-2 font-display text-3xl">Add customer build</h2></div><button type="button" onClick={onClose} className="text-black/35 hover:text-black"><X size={19} /></button></div><p className="mt-4 text-sm leading-6 text-black/55">Use an approved project photo, product-in-use photo, or finished prototype photo. Avoid publishing customer information without consent.</p><div className="mt-7 grid gap-4"><AdminField label="Story title" value={story.title} onChange={(value) => update({ title: value })} /><div className="grid gap-4 sm:grid-cols-2"><AdminField label="Customer name (optional)" value={story.customerName} onChange={(value) => update({ customerName: value })} /><AdminField label="Project type" value={story.projectType} onChange={(value) => update({ projectType: value })} /></div><AdminField label="Caption" value={story.caption} onChange={(value) => update({ caption: value })} /><label><span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/45">Evidence photo</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile} className="block w-full rounded-sm border border-dashed border-black/20 bg-[#f7f8f8] p-3 text-xs" />{story.image && <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-700">Ready to upload: {story.image.filename}</p>}{uploadError && <p className="mt-2 text-xs text-red-600">Photo upload failed: {uploadError}</p>}</label></div><div className="mt-7 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.13em] text-black/45">Cancel</button><button type="button" onClick={onSave} disabled={saving || !story.title} className="inline-flex items-center gap-2 rounded-sm bg-orange-500 px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black disabled:opacity-50">{saving && <Loader2 size={13} className="animate-spin" />} Publish to homepage</button></div></div></div>; }
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">SKU</span>
+              <input
+                value={product.sku}
+                onChange={(e) => update({ sku: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Price (INR) *</span>
+              <input
+                type="number"
+                value={product.price}
+                onChange={(e) => update({ price: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
+              />
+            </label>
+          </div>
 
-function MetricCard({ label, value, accent = "orange" }: { label: string; value: string; accent?: string }) { const color = accent === "red" ? "text-red-600" : accent === "green" ? "text-emerald-700" : accent === "amber" ? "text-amber-700" : "text-orange-600"; return <div className="rounded-sm border border-black/10 bg-white p-5"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/35">{label}</p><p className={`mt-3 font-display text-3xl ${color}`}>{value}</p></div>; }
-function OrdersAdmin({ orders, onVerify, onReject, onTransition, busy }: { orders: any[]; onVerify: (id: number, reference?: string) => void; onReject: (id: number) => void; onTransition: (id: number, status: "PACKED" | "SHIPPED" | "DELIVERED" | "PAYMENT_PENDING") => void; busy: boolean }) { return <div><div className="flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Commerce / controlled workflow</p><h2 className="mt-2 font-display text-4xl">Orders <span className="text-black/25">/{orders.length}</span></h2></div><p className="max-w-xs text-right text-sm leading-6 text-black/45">WhatsApp remains the customer handoff. This ledger is the source of truth for status, payment, and stock.</p></div><div className="mt-8 grid gap-4">{orders.length ? orders.map((order) => <OrderAdminCard key={order.id} order={order} onVerify={onVerify} onReject={onReject} onTransition={onTransition} busy={busy} />) : <div className="rounded-sm border border-dashed border-black/15 bg-white p-8 text-sm text-black/45">No order requests yet. WhatsApp checkout requests will appear here.</div>}</div></div>; }
-function OrderAdminCard({ order, onVerify, onReject, onTransition, busy }: { order: any; onVerify: (id: number, reference?: string) => void; onReject: (id: number) => void; onTransition: (id: number, status: "PACKED" | "SHIPPED" | "DELIVERED" | "PAYMENT_PENDING") => void; busy: boolean }) { const [reference, setReference] = useState(""); const next = order.status === "ORDER_REQUESTED" ? "PAYMENT_PENDING" : order.status === "ORDER_CONFIRMED" ? "PACKED" : order.status === "PACKED" ? "SHIPPED" : order.status === "SHIPPED" ? "DELIVERED" : null; return <article className="rounded-sm border border-black/10 bg-white p-5 md:p-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-start"><div><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-orange-600">{order.orderNumber || `HAI-${order.id}`} · {order.status.replaceAll("_", " ")}</p><h3 className="mt-2 font-display text-2xl">{order.customerName}</h3><p className="mt-1 text-sm text-black/45">{order.phone} · {order.address}</p></div><div className="text-left md:text-right"><p className="font-mono text-xl text-orange-700">{formatINR(order.finalAmount || order.total)}</p><p className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-black/35">{new Date(order.createdAt).toLocaleString()}</p></div></div><div className="mt-5 grid gap-2 border-y border-black/10 py-4">{(order.items || []).map((item: any) => <div key={item.id} className="flex justify-between gap-4 text-sm"><span>{item.productName} × {item.quantity}</span><span className="font-mono text-black/55">{formatINR(item.lineTotal)}</span></div>)}<div className="mt-2 flex justify-between border-t border-black/10 pt-3 font-mono text-xs"><span>Subtotal + shipping</span><span>{formatINR(order.subtotal || order.total)} + {formatINR(order.shipping || 0)}</span></div></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-black/5 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-black/45">Payment: {order.paymentStatus}</span>{order.status === "ORDER_REQUESTED" && <button type="button" disabled={busy} onClick={() => onTransition(order.id, "PAYMENT_PENDING")} className="rounded-sm bg-black px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-white disabled:opacity-50">Mark payment pending</button>}{order.status === "PAYMENT_PENDING" && <><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Payment reference (optional)" className="h-9 min-w-48 rounded-sm border border-black/10 bg-[#f7f8f8] px-3 text-xs outline-none focus:border-orange-500" /><button type="button" disabled={busy} onClick={() => onVerify(order.id, reference || undefined)} className="rounded-sm bg-emerald-600 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-white disabled:opacity-50">Verify payment</button><button type="button" disabled={busy} onClick={() => onReject(order.id)} className="rounded-sm border border-red-200 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-red-600 disabled:opacity-50">Reject</button></>}{next && <button type="button" disabled={busy} onClick={() => onTransition(order.id, next as any)} className="rounded-sm border border-black/15 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-black/55 disabled:opacity-50">Move to {next.replaceAll("_", " ")}</button>}</div></article>; }
-function InventoryAdmin({ products, movements, restockDraft, setRestockDraft, onRestock, busy }: { products: Product[]; movements: any[]; restockDraft: Record<string, string>; setRestockDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>; onRestock: (product: Product) => void; busy: boolean }) { return <div><div className="flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Inventory / HAIDRONICS controlled</p><h2 className="mt-2 font-display text-4xl">Stock control.</h2></div><p className="max-w-xs text-right text-sm leading-6 text-black/45">Payment verification deducts stock in one database transaction. Restocks are recorded as movements.</p></div><div className="mt-8 overflow-x-auto rounded-sm bg-white"><table className="w-full min-w-[700px] text-left"><thead className="border-b border-black/10 font-mono text-[9px] uppercase tracking-[0.13em] text-black/35"><tr><th className="px-5 py-4">Product</th><th className="px-5 py-4">Current</th><th className="px-5 py-4">Threshold</th><th className="px-5 py-4">Restock</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-b border-black/[0.06]"><td className="px-5 py-4"><p className="text-sm font-medium">{product.name}</p><p className="mt-1 text-xs text-black/40">{product.sku}</p></td><td className={`px-5 py-4 font-mono text-sm ${(product.stock || 0) <= (product.lowStockThreshold || 5) ? "text-red-600" : "text-emerald-700"}`}>{product.stock || 0}</td><td className="px-5 py-4 font-mono text-xs text-black/45">{product.lowStockThreshold || 5}</td><td className="px-5 py-4"><div className="flex gap-2"><input type="number" min="1" value={restockDraft[String(product.dbId)] || ""} onChange={(event) => setRestockDraft((current) => ({ ...current, [String(product.dbId)]: event.target.value }))} placeholder="Qty" className="h-9 w-20 rounded-sm border border-black/10 bg-[#f7f8f8] px-2 text-xs" /><button type="button" disabled={busy || !product.dbId} onClick={() => onRestock(product)} className="rounded-sm bg-orange-500 px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-black disabled:opacity-50">+ Restock</button></div></td></tr>)}</tbody></table></div><div className="mt-8"><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600">Movement history</p><div className="mt-3 grid gap-2">{movements.slice(0, 10).map((row: any) => <div key={row.movement.id} className="flex flex-wrap justify-between gap-3 rounded-sm bg-white px-4 py-3 text-sm"><span>{row.productName || "Product"} · <span className="font-mono text-xs text-black/45">{row.movement.reason}</span></span><span className={`font-mono text-xs ${row.movement.change > 0 ? "text-emerald-700" : "text-red-600"}`}>{row.movement.change > 0 ? "+" : ""}{row.movement.change}</span></div>)}</div></div></div>; }
-function TransactionsAdmin({ rows }: { rows: any[] }) { return <SimpleLedger title="Transactions" eyebrow="Finance / verified sales" rows={rows.map((row) => ({ id: row.transaction.id, primary: row.orderNumber || `Order #${row.transaction.orderId}`, secondary: `${row.transaction.type} · ${row.transaction.paymentStatus}`, amount: formatINR(row.transaction.amount), date: row.transaction.createdAt }))} empty="Verified payment transactions will appear here." />; }
-function AuditAdmin({ rows }: { rows: any[] }) { return <SimpleLedger title="Audit logs" eyebrow="Security / immutable trail" rows={rows.map((row) => ({ id: row.log.id, primary: row.log.action, secondary: `${row.adminName || "Admin"} · ${row.log.entityType || "system"} #${row.log.entityId || "—"}`, amount: "", date: row.log.createdAt }))} empty="Sensitive admin actions will appear here." />; }
-function SimpleLedger({ title, eyebrow, rows, empty }: { title: string; eyebrow: string; rows: Array<{ id: number; primary: string; secondary: string; amount: string; date: Date | string }>; empty: string }) { return <div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">{eyebrow}</p><h2 className="mt-2 font-display text-4xl">{title} <span className="text-black/25">/{rows.length}</span></h2><div className="mt-8 grid gap-2">{rows.length ? rows.map((row) => <div key={row.id} className="flex flex-col justify-between gap-3 rounded-sm bg-white p-5 md:flex-row md:items-center"><div><p className="font-display text-xl">{row.primary}</p><p className="mt-1 text-sm text-black/45">{row.secondary}</p></div><div className="text-left md:text-right">{row.amount && <p className="font-mono text-sm text-orange-700">{row.amount}</p>}<p className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-black/35">{new Date(row.date).toLocaleString()}</p></div></div>) : <div className="rounded-sm border border-dashed border-black/15 bg-white p-8 text-sm text-black/45">{empty}</div>}</div></div>; }
-function ReportsAdmin({ metrics, products }: { metrics?: { orders: number; pendingPayments: number; lowStock: number; todaySales: number; revenue: number }; products: Product[] }) { return <div><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600">Reports / operational view</p><h2 className="mt-2 font-display text-4xl">What the business is doing.</h2><div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="All orders" value={String(metrics?.orders || 0)} /><MetricCard label="Pending payments" value={String(metrics?.pendingPayments || 0)} accent="amber" /><MetricCard label="Low-stock products" value={String(metrics?.lowStock || 0)} accent="red" /><MetricCard label="Verified revenue" value={formatINR(metrics?.revenue || 0)} accent="green" /></div><div className="mt-8 rounded-sm bg-white p-6"><p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600">Product readiness</p><div className="mt-5 grid gap-3">{products.map((product) => <div key={product.id} className="flex items-center justify-between border-b border-black/[0.06] pb-3 text-sm last:border-0 last:pb-0"><span>{product.name}</span><span className="font-mono text-xs text-black/45">{product.stock || 0} in stock · threshold {product.lowStockThreshold || 5}</span></div>)}</div></div></div>; }
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Category</span>
+              <select
+                value={product.category}
+                onChange={(e) => update({ category: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500 bg-white"
+              >
+                <option>Development boards</option>
+                <option>Sensors</option>
+                <option>Displays</option>
+                <option>Modules</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Stock Status</span>
+              <select
+                value={product.stockStatus}
+                onChange={(e) => update({ stockStatus: e.target.value as any })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500 bg-white"
+              >
+                <option>In stock</option>
+                <option>Limited</option>
+                <option>Out of stock</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Current Stock Count</span>
+              <input
+                type="number"
+                value={product.stock}
+                onChange={(e) => update({ stock: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Low Stock Threshold</span>
+              <input
+                type="number"
+                value={product.lowStockThreshold}
+                onChange={(e) => update({ lowStockThreshold: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Short Description</span>
+            <input
+              value={product.shortDescription}
+              onChange={(e) => update({ shortDescription: e.target.value })}
+              className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Full Description</span>
+            <textarea
+              rows={3}
+              value={product.description}
+              onChange={(e) => update({ description: e.target.value })}
+              className="w-full rounded-md border border-black/15 p-3 text-sm outline-none focus:border-orange-500"
+            />
+          </label>
+
+          {/* Photo Upload Option */}
+          <div className="rounded-lg border border-dashed border-black/20 bg-[#f7f8f8] p-4">
+            <span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/60 font-bold">
+              Product Photo Upload
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFile}
+              className="block w-full text-xs text-black/60 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-3 file:py-1.5 file:font-mono file:text-[10px] file:font-bold file:text-white hover:file:bg-orange-600"
+            />
+            {product.imageUrl && (
+              <div className="mt-3 flex items-center gap-3">
+                <img src={product.imageUrl} alt="Preview" className="size-16 rounded-md object-cover border border-black/15" />
+                <span className="font-mono text-[10px] text-emerald-700 font-semibold">✓ Photo selected</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end gap-3 border-t border-black/10 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 font-mono text-[10px] uppercase text-black/60">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !product.name || !product.price}
+            className="inline-flex items-center gap-2 rounded-md bg-orange-500 px-6 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 disabled:opacity-50"
+          >
+            {saving && <Loader2 size={13} className="animate-spin" />}
+            {editing ? "Save Changes" : "Create Product"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddComboModal({
+  combo,
+  setCombo,
+  products,
+  onClose,
+  onSave,
+  saving,
+}: {
+  combo: { name: string; tagline: string; description: string; price: string; productSlugs: string[] };
+  setCombo: React.Dispatch<React.SetStateAction<{ name: string; tagline: string; description: string; price: string; productSlugs: string[] }>>;
+  products: Product[];
+  onClose: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const toggle = (slug: string) => {
+    setCombo((cur) => ({
+      ...cur,
+      productSlugs: cur.productSlugs.includes(slug)
+        ? cur.productSlugs.filter((s) => s !== slug)
+        : [...cur.productSlugs, slug],
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl md:p-8">
+        <div className="flex items-start justify-between border-b border-black/10 pb-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600 font-bold">Bundle Builder</p>
+            <h2 className="mt-1 font-display text-2xl font-bold">Create Combo Kit</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-black/40 hover:text-black">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4">
+          <label className="block">
+            <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Kit Name *</span>
+            <input
+              value={combo.name}
+              onChange={(e) => setCombo({ ...combo, name: e.target.value })}
+              placeholder="e.g. IoT Starter Pack"
+              className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Bundle Price (INR) *</span>
+              <input
+                type="number"
+                value={combo.price}
+                onChange={(e) => setCombo({ ...combo, price: e.target.value })}
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Tagline</span>
+              <input
+                value={combo.tagline}
+                onChange={(e) => setCombo({ ...combo, tagline: e.target.value })}
+                placeholder="e.g. ESP32 + OLED + Relay"
+                className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Description</span>
+            <textarea
+              rows={2}
+              value={combo.description}
+              onChange={(e) => setCombo({ ...combo, description: e.target.value })}
+              className="w-full rounded-md border border-black/15 p-3 text-sm outline-none focus:border-orange-500"
+            />
+          </label>
+
+          <div>
+            <span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">
+              Select Included Components ({combo.productSlugs.length} selected)
+            </span>
+            <div className="grid max-h-48 gap-1.5 overflow-y-auto rounded-md border border-black/10 bg-[#f7f8f8] p-2">
+              {products.map((p) => (
+                <label
+                  key={p.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded p-2 text-xs transition-colors ${
+                    combo.productSlugs.includes(p.id) ? "bg-orange-100 font-semibold" : "hover:bg-black/5"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={combo.productSlugs.includes(p.id)}
+                    onChange={() => toggle(p.id)}
+                    className="size-4 accent-orange-500"
+                  />
+                  <span>{p.name}</span>
+                  <span className="ml-auto font-mono text-black/40">{formatINR(p.price)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end gap-3 border-t border-black/10 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 font-mono text-[10px] uppercase text-black/60">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !combo.name || !combo.price || combo.productSlugs.length === 0}
+            className="inline-flex items-center gap-2 rounded-md bg-orange-500 px-6 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 disabled:opacity-50"
+          >
+            {saving && <Loader2 size={13} className="animate-spin" />} Publish Combo Kit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomerStoriesAdmin({
+  stories,
+  onAdd,
+  onDelete,
+}: {
+  stories: CustomerStoryAdmin[];
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Storefront Proof</p>
+          <h2 className="mt-1 font-display text-3xl font-bold">Builds in the Wild ({stories.length})</h2>
+        </div>
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {stories.map((story) => (
+          <div key={story.id} className="rounded-lg border border-black/10 bg-white p-5 shadow-sm">
+            <h3 className="font-display text-lg font-bold">{story.title}</h3>
+            <p className="mt-1 text-xs text-black/50">{story.customerName}</p>
+            <p className="mt-2 text-sm text-black/70">{story.caption}</p>
+            <button
+              type="button"
+              onClick={() => onDelete(story.id)}
+              className="mt-4 font-mono text-[9px] uppercase tracking-wider text-red-600"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InvoiceModal({
+  order,
+  settings,
+  onClose,
+}: {
+  order: any;
+  settings: SettingsForm;
+  onClose: () => void;
+}) {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-xl bg-white p-8 shadow-2xl text-black my-8 border border-black/10">
+        {/* Printable Invoice Header */}
+        <div className="flex items-start justify-between border-b border-black/15 pb-6">
+          <div className="flex items-center gap-3">
+            <img src={logoIconImage} alt="HAIDRONICS" className="size-12 rounded-lg object-contain bg-[#111416] p-1.5" />
+            <div>
+              <h1 className="font-display text-2xl font-bold tracking-wider">HAIDRONICS</h1>
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-orange-600 font-bold">Where Engineering Starts</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-sm font-bold text-orange-700">{order.invoiceId || `INV-${order.id}`}</p>
+            <p className="font-mono text-[10px] text-black/50">Date: {new Date(order.createdAt).toLocaleDateString()}</p>
+            <span className="mt-1 inline-block rounded bg-emerald-100 text-emerald-800 px-2 py-0.5 font-mono text-[9px] font-bold uppercase">
+              Paid / Verified
+            </span>
+          </div>
+        </div>
+
+        {/* Billed To / From */}
+        <div className="mt-6 grid grid-cols-2 gap-6 text-xs">
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-wider text-black/40 font-bold">Billed To:</p>
+            <p className="mt-1 font-bold text-sm text-black">{order.customerName}</p>
+            <p className="mt-0.5 text-black/70">Phone: {order.phone}</p>
+            <p className="mt-0.5 text-black/70 leading-relaxed">{order.address}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-[9px] uppercase tracking-wider text-black/40 font-bold">Issued By:</p>
+            <p className="mt-1 font-bold text-sm text-black">HAIDRONICS</p>
+            <p className="mt-0.5 text-black/70">WhatsApp: +91 8248453861</p>
+            <p className="mt-0.5 text-black/70">contact@haidronics.com</p>
+          </div>
+        </div>
+
+        {/* Itemized Table */}
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-y border-black/15 bg-[#fafafa] font-mono text-[9px] uppercase tracking-wider text-black/50">
+              <tr>
+                <th className="py-2.5 px-3">Item Description</th>
+                <th className="py-2.5 px-3">SKU</th>
+                <th className="py-2.5 px-3 text-center">Qty</th>
+                <th className="py-2.5 px-3 text-right">Unit Price</th>
+                <th className="py-2.5 px-3 text-right">Line Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/[0.06]">
+              {(order.items || []).map((item: any, idx: number) => (
+                <tr key={idx}>
+                  <td className="py-2.5 px-3 font-medium">{item.productName}</td>
+                  <td className="py-2.5 px-3 font-mono text-black/50">{item.sku}</td>
+                  <td className="py-2.5 px-3 text-center font-mono">{item.quantity}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatINR(item.unitPrice)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatINR(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals Calculation */}
+        <div className="mt-6 flex justify-end border-t border-black/15 pt-4">
+          <div className="w-64 space-y-2 text-xs">
+            <div className="flex justify-between text-black/60">
+              <span>Items Subtotal:</span>
+              <span className="font-mono">{formatINR(order.subtotal || order.total - 50)}</span>
+            </div>
+            <div className="flex justify-between text-black/60">
+              <span>Shipping & Handling:</span>
+              <span className="font-mono">{formatINR(order.shipping || 50)}</span>
+            </div>
+            <div className="flex justify-between border-t border-black/15 pt-2 text-base font-bold text-black font-mono">
+              <span>Total Amount:</span>
+              <span className="text-orange-700">{formatINR(order.finalAmount || order.total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="mt-8 flex items-center justify-between border-t border-black/10 pt-4 print:hidden">
+          <span className="text-xs text-black/40 font-mono">H-Invoice System Output</span>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-md bg-black px-4 py-2 font-mono text-[10px] font-bold uppercase text-white hover:bg-orange-600"
+            >
+              <Printer size={14} /> Print / Save PDF
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-black/20 px-4 py-2 font-mono text-[10px] uppercase text-black/60 hover:bg-black/5"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

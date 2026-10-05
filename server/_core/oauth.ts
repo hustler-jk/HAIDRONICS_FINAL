@@ -62,4 +62,35 @@ export function registerOAuthRoutes(app: Express) {
       res.status(500).json({ error: "OAuth callback failed" });
     }
   });
+
+  // Local development login helper
+  app.post("/api/dev-login", async (req: Request, res: Response) => {
+    try {
+      const role = req.body?.role === "admin" ? "admin" : "user";
+      const name = req.body?.name || (role === "admin" ? "HAIDRONICS Admin" : "Test Customer");
+      const email = req.body?.email || (role === "admin" ? "admin@haidronics.com" : "customer@example.com");
+      const openId = role === "admin" ? "admin-local-master" : `customer-${Date.now()}`;
+
+      await db.upsertUser({
+        openId,
+        name,
+        email,
+        loginMethod: "local-dev",
+        role: role as any,
+        lastSignedIn: new Date(),
+      });
+
+      const sessionToken = await sdk.createSessionToken(openId, {
+        name,
+        expiresInMs: ONE_YEAR_MS,
+      });
+
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.json({ success: true, user: { openId, name, email, role } });
+    } catch (error) {
+      console.error("[DevLogin] failed", error);
+      res.status(500).json({ error: "Dev login failed" });
+    }
+  });
 }

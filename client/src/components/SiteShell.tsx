@@ -14,11 +14,7 @@ export function useBusinessSettings() { return useContext(BusinessSettingsContex
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="group inline-flex items-center gap-3" aria-label="HAIDRONICS home">
-      <img src={logoIconImage} alt="" className="brand-image" aria-hidden="true" />
-      <span className="leading-none">
-        <span className="block font-display text-[1.1rem] font-semibold tracking-[0.19em] text-white group-hover:text-orange-300 transition-colors">HAIDRONICS</span>
-        {!compact && <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.22em] text-white/45">Where engineering starts</span>}
-      </span>
+      <img src={logoIconImage} alt="HAIDRONICS" className="h-11 w-auto rounded-md object-contain transition-transform group-hover:scale-105" />
     </Link>
   );
 }

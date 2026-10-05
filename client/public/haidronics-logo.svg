@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" width="280" height="56">
+  <defs>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff7a1f" />
+      <stop offset="100%" stop-color="#e04e00" />
+    </linearGradient>
+  </defs>
+  <!-- Icon Mark -->
+  <g transform="translate(4, 4)">
+    <rect x="0" y="0" width="48" height="48" rx="8" fill="#0d1114" stroke="#ff6417" stroke-width="1.5" stroke-opacity="0.5" />
+    <circle cx="6" cy="6" r="1.5" fill="#ff6417" />
+    <circle cx="42" cy="6" r="1.5" fill="#ff6417" />
+    <circle cx="6" cy="42" r="1.5" fill="#ff6417" />
+    <circle cx="42" cy="42" r="1.5" fill="#ff6417" />
+    <line x1="6" y1="6" x2="12" y2="12" stroke="#ff6417" stroke-width="1" stroke-opacity="0.4" />
+    <line x1="42" y1="6" x2="36" y2="12" stroke="#ff6417" stroke-width="1" stroke-opacity="0.4" />
+    <line x1="6" y1="42" x2="12" y2="36" stroke="#ff6417" stroke-width="1" stroke-opacity="0.4" />
+    <line x1="42" y1="42" x2="36" y2="36" stroke="#ff6417" stroke-width="1" stroke-opacity="0.4" />
+    <path d="M14 12 L14 36 M34 12 L34 36 M14 24 L34 24" stroke="url(#logoGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="24" cy="24" r="3" fill="#ffffff" />
+    <circle cx="24" cy="24" r="1.5" fill="#ff6417" />
+  </g>
+  <!-- Brand Typography -->
+  <text x="64" y="28" font-family="'Space Grotesk', 'DM Sans', sans-serif" font-weight="700" font-size="20" letter-spacing="0.18em" fill="#ffffff">HAIDRONICS</text>
+  <text x="65" y="42" font-family="'IBM Plex Mono', monospace" font-weight="500" font-size="8.5" letter-spacing="0.22em" fill="#ff6417" fill-opacity="0.9">WHERE ENGINEERING STARTS</text>
+</svg>

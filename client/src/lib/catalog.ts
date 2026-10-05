@@ -31,9 +31,9 @@ export type ComboKit = {
   items: { productSlug: string; quantity: number }[];
 };
 
-export const heroImage = "/manus-storage/haidronics-circuit-hero_4fdc732d.jpg";
-export const logoImage = "/manus-storage/haidronics-logo_51ad85ad.png";
-export const logoIconImage = "/manus-storage/haidronics-icon_0c53ca1d.png";
+export const heroImage = "/haidronics-logo.png";
+export const logoImage = "/haidronics-logo.png";
+export const logoIconImage = "/haidronics-icon.png";
 
 export const products: Product[] = [
   {
@@ -154,20 +154,49 @@ export const formatINR = (amount: number) => `₹${amount.toLocaleString("en-IN"
 
 export const whatsappNumber = "918248453861";
 
-export function whatsappLink(message: string, configuredNumber = whatsappNumber) {
-  const number = configuredNumber.replace(/\D/g, "");
+export function normalizeWhatsappNumber(raw?: string): string {
+  if (!raw) return whatsappNumber;
+  let digits = raw.replace(/\D/g, "");
+  if (!digits) return whatsappNumber;
+  if (digits.length === 10) digits = `91${digits}`;
+  return digits;
+}
+
+export function whatsappLink(message: string, configuredNumber?: string) {
+  const number = normalizeWhatsappNumber(configuredNumber);
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
 export function productEnquiry(product: Product) {
-  return `Order Enquiry – HAIDRONICS\n\nI am interested in:\n${product.name}\nSKU: ${product.sku}\n\nPlease confirm availability, final price, shipping charges, payment details, and delivery information.`;
+  return `⚡ *HAIDRONICS Product Enquiry*\n\n` +
+    `*Product:* ${product.name}\n` +
+    `*SKU:* ${product.sku}\n` +
+    `*Category:* ${product.category}\n` +
+    `*Price:* ${formatINR(product.price)}\n\n` +
+    `Please confirm availability, shipping details, and how to proceed with payment.`;
 }
 
-export function cartMessage(items: CartItem[], customer?: { name: string; phone: string; address: string }) {
-  const lines = items.map((item, index) => `${index + 1}. ${item.name} (${item.sku}) × ${item.quantity} — ${formatINR(item.price * item.quantity)}`);
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const customerBlock = customer ? `Customer name: ${customer.name}\nPhone / WhatsApp: ${customer.phone}\nDelivery address: ${customer.address}\n\n` : "";
-  return `Order Enquiry – HAIDRONICS\n\n${customerBlock}Components requested:\n${lines.join("\n")}\n\nEstimated Total: ${formatINR(total)}\n\nPlease confirm availability, final price, shipping charges, payment details, and delivery information.`;
+export function cartMessage(items: CartItem[], customer?: { name: string; phone: string; address: string }, orderNumber?: string) {
+  const lines = items.map((item, index) => `${index + 1}. *${item.name}* (${item.sku})\n   Qty: ${item.quantity} × ${formatINR(item.price)} = ${formatINR(item.price * item.quantity)}`);
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const shipping = 50;
+  const total = subtotal + shipping;
+  const orderHeader = orderNumber ? `*Order Ref:* ${orderNumber}\n` : "";
+  const customerBlock = customer
+    ? `\n👤 *Customer Details:*\n` +
+      `• Name: ${customer.name}\n` +
+      `• Phone: ${customer.phone}\n` +
+      `• Address: ${customer.address}\n`
+    : "";
+
+  return `📦 *HAIDRONICS Order Request*\n${orderHeader}${customerBlock}\n` +
+    `🛒 *Items Ordered:*\n${lines.join("\n")}\n\n` +
+    `────────────────────────\n` +
+    `• Subtotal: ${formatINR(subtotal)}\n` +
+    `• Estimated Shipping: ${formatINR(shipping)}\n` +
+    `• *Total Payable: ${formatINR(total)}*\n` +
+    `────────────────────────\n\n` +
+    `Please verify component availability and provide payment details (UPI / Bank Transfer) to confirm this order.`;
 }
 
 export function findProduct(id: string) {
@@ -221,9 +250,25 @@ export function normalizeApiComboKits(rows: Array<Record<string, unknown>> | und
 }
 
 export function recommendedProducts(product: Product, source: Product[]) {
+  // Complementary category pairings (e.g. dev boards pair with displays, sensors, modules)
+  const complementaryCategories: Record<string, string[]> = {
+    "Development boards": ["Displays", "Sensors", "Modules"],
+    "Sensors": ["Development boards", "Displays", "Modules"],
+    "Displays": ["Development boards", "Sensors", "Modules"],
+    "Modules": ["Development boards", "Sensors", "Displays"],
+  };
+
+  const preferred = complementaryCategories[product.category] || [];
+
   return source
     .filter((candidate) => candidate.id !== product.id)
-    .map((candidate) => ({ candidate, score: (candidate.category === product.category ? 3 : 0) + candidate.tags.filter((tag) => product.tags.includes(tag)).length }))
+    .map((candidate) => {
+      let score = 0;
+      if (preferred.includes(candidate.category)) score += 5;
+      if (candidate.category === product.category) score += 2;
+      score += candidate.tags.filter((tag) => product.tags.includes(tag)).length * 2;
+      return { candidate, score };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map(({ candidate }) => candidate);
