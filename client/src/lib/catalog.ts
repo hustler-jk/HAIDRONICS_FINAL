@@ -12,6 +12,8 @@ export type Product = {
   image: string;
   imageUrl?: string;
   stockStatus?: string;
+  stock?: number;
+  lowStockThreshold?: number;
   specs: { label: string; value: string }[];
   featured?: boolean;
 };
@@ -184,6 +186,8 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
       dbId: typeof row.id === "number" ? row.id : undefined,
       imageUrl: typeof row.imageUrl === "string" ? row.imageUrl : undefined,
       stockStatus: String(row.stockStatus || "In stock"),
+      stock: Number(row.stock || 0),
+      lowStockThreshold: Number(row.lowStockThreshold || 5),
       name: String(row.name || "Untitled component"),
       sku: String(row.sku || "HD-CATALOG"),
       price: Number(row.price || 0),

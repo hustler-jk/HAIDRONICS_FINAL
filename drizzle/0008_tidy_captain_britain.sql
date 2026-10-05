@@ -1,0 +1,1 @@
+ALTER TABLE `siteSettings` ADD `shippingFee` int DEFAULT 50 NOT NULL;

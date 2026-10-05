@@ -28,6 +28,9 @@ export const products = mysqlTable("products", {
   specs: text("specs"),
   imageUrl: text("imageUrl"),
   stockStatus: varchar("stockStatus", { length: 40 }).default("In stock").notNull(),
+  stock: int("stock").default(0).notNull(),
+  lowStockThreshold: int("lowStockThreshold").default(5).notNull(),
+  active: int("active").default(1).notNull(),
   featured: int("featured").default(0).notNull(),
   hidden: int("hidden").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -98,18 +101,80 @@ export const siteSettings = mysqlTable("siteSettings", {
   mapsUrl: text("mapsUrl"),
   instagramUrl: varchar("instagramUrl", { length: 320 }),
   youtubeUrl: varchar("youtubeUrl", { length: 320 }),
+  shippingFee: int("shippingFee").default(50).notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export const orders = mysqlTable("orders", {
   id: int("id").autoincrement().primaryKey(),
+  orderNumber: varchar("orderNumber", { length: 40 }).unique(),
   userId: int("userId"),
   customerName: varchar("customerName", { length: 160 }).notNull(),
   phone: varchar("phone", { length: 80 }).notNull(),
   address: text("address").notNull(),
   items: text("items").notNull(),
+  subtotal: int("subtotal").default(0).notNull(),
+  shipping: int("shipping").default(0).notNull(),
+  calculatedAmount: int("calculatedAmount").default(0).notNull(),
+  finalAmount: int("finalAmount").default(0).notNull(),
   total: int("total").notNull(),
-  status: varchar("status", { length: 40 }).default("whatsapp_pending").notNull(),
+  amountOverridden: int("amountOverridden").default(0).notNull(),
+  status: varchar("status", { length: 40 }).default("ORDER_REQUESTED").notNull(),
+  paymentStatus: varchar("paymentStatus", { length: 30 }).default("PENDING").notNull(),
+  invoiceId: varchar("invoiceId", { length: 80 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const orderItems = mysqlTable("orderItems", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  productId: int("productId").notNull(),
+  productName: varchar("productName", { length: 180 }).notNull(),
+  sku: varchar("sku", { length: 80 }),
+  quantity: int("quantity").notNull(),
+  unitPrice: int("unitPrice").notNull(),
+  lineTotal: int("lineTotal").notNull(),
+});
+
+export const payments = mysqlTable("payments", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  amount: int("amount").notNull(),
+  status: varchar("status", { length: 30 }).default("PENDING").notNull(),
+  reference: varchar("reference", { length: 160 }),
+  verifiedBy: int("verifiedBy"),
+  verifiedAt: timestamp("verifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const inventoryMovements = mysqlTable("inventoryMovements", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  change: int("change").notNull(),
+  reason: varchar("reason", { length: 40 }).notNull(),
+  orderId: int("orderId"),
+  note: text("note"),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const transactions = mysqlTable("transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  amount: int("amount").notNull(),
+  type: varchar("type", { length: 30 }).notNull(),
+  paymentStatus: varchar("paymentStatus", { length: 30 }).notNull(),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const auditLogs = mysqlTable("auditLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  adminUserId: int("adminUserId"),
+  action: varchar("action", { length: 80 }).notNull(),
+  entityType: varchar("entityType", { length: 50 }),
+  entityId: int("entityId"),
+  details: text("details"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

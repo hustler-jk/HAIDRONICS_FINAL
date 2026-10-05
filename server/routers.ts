@@ -2,11 +2,11 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createCatalogProduct, createComboKit, createCustomerStory, createOrder, deleteCatalogProduct, getCatalogProduct, getSiteSettings, hideComboKit, hideCustomerStory, listAnalyticsEvents, listCatalogProducts, listComboKits, listCustomerStories, listOrdersForUser, listProductRequests, listProjectRequests, listRequestsForUser, recordAnalyticsEvent, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, updateCatalogProduct } from "./db";
+import { createCatalogProduct, createComboKit, createCustomerStory, createServerPricedOrder, deleteCatalogProduct, getCatalogProduct, getCommerceMetrics, getOrderForUser, getSiteSettings, hideComboKit, hideCustomerStory, listAdminOrders, listAnalyticsEvents, listAuditLogs, listCatalogProducts, listComboKits, listCustomerStories, listInventoryMovements, listOrdersForUser, listProductRequests, listProjectRequests, listRequestsForUser, listTransactions, recordAnalyticsEvent, rejectOrderPayment, restockProduct, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, transitionOrderStatus, updateCatalogProduct, verifyOrderPayment } from "./db";
 import { storagePut } from "./storage";
 
 const productInput = z.object({
-  slug: z.string().min(1).max(180), name: z.string().min(1).max(180), sku: z.string().max(80).optional(), price: z.number().int().nonnegative(), shortDescription: z.string().optional(), description: z.string().optional(), category: z.string().max(80).optional(), tags: z.string().optional(), specs: z.string().optional(), imageUrl: z.string().optional(), stockStatus: z.enum(["In stock", "Limited", "Out of stock"]).optional(), featured: z.number().int().min(0).max(1).optional(),
+  slug: z.string().min(1).max(180), name: z.string().min(1).max(180), sku: z.string().max(80).optional(), price: z.number().int().nonnegative(), shortDescription: z.string().optional(), description: z.string().optional(), category: z.string().max(80).optional(), tags: z.string().optional(), specs: z.string().optional(), imageUrl: z.string().optional(), stockStatus: z.enum(["In stock", "Limited", "Out of stock"]).optional(), stock: z.number().int().nonnegative().optional(), lowStockThreshold: z.number().int().nonnegative().optional(), active: z.number().int().min(0).max(1).optional(), featured: z.number().int().min(0).max(1).optional(),
 });
 
 export const appRouter = router({
@@ -34,10 +34,11 @@ export const appRouter = router({
     subscribe: publicProcedure.input(z.object({ email: z.string().email() })).mutation(({ input }) => subscribeNewsletter(input.email).then(() => ({ success: true }))),
   }),
   checkout: router({
-    create: publicProcedure.input(z.object({ customerName: z.string().min(2), phone: z.string().min(7), address: z.string().min(8), items: z.string().min(2), total: z.number().int().positive() })).mutation(({ input, ctx }) => createOrder({ ...input, userId: ctx.user?.id }).then(() => ({ success: true }))),
+    create: publicProcedure.input(z.object({ customerName: z.string().min(2), phone: z.string().min(7), address: z.string().min(8), items: z.array(z.object({ slug: z.string().min(1), quantity: z.number().int().positive().max(99) })).min(1) })).mutation(({ input, ctx }) => createServerPricedOrder({ ...input, userId: ctx.user?.id })),
   }),
   account: router({
     history: protectedProcedure.query(({ ctx }) => listRequestsForUser(ctx.user.id).then(async (requests) => ({ ...requests, orders: await listOrdersForUser(ctx.user.id) }))),
+    order: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input, ctx }) => getOrderForUser(ctx.user.id, input.id)),
   }),
   admin: router({
     products: router({
@@ -63,8 +64,27 @@ export const appRouter = router({
     analytics: router({
       list: adminProcedure.query(() => listAnalyticsEvents()),
     }),
+    orders: router({
+      list: adminProcedure.query(() => listAdminOrders()),
+      transition: adminProcedure.input(z.object({ id: z.number().int().positive(), status: z.enum(["PAYMENT_PENDING", "ORDER_CONFIRMED", "PACKED", "SHIPPED", "DELIVERED", "CANCELLED"]) })).mutation(({ input, ctx }) => transitionOrderStatus(input.id, input.status, ctx.user.id)),
+      verifyPayment: adminProcedure.input(z.object({ id: z.number().int().positive(), reference: z.string().max(160).optional() })).mutation(({ input, ctx }) => verifyOrderPayment(input.id, ctx.user.id, input.reference)),
+      rejectPayment: adminProcedure.input(z.object({ id: z.number().int().positive(), note: z.string().max(500).optional() })).mutation(({ input, ctx }) => rejectOrderPayment(input.id, ctx.user.id, input.note)),
+    }),
+    inventory: router({
+      movements: adminProcedure.query(() => listInventoryMovements()),
+      restock: adminProcedure.input(z.object({ productId: z.number().int().positive(), amount: z.number().int().positive(), note: z.string().max(500).optional() })).mutation(({ input, ctx }) => restockProduct(input.productId, input.amount, ctx.user.id, input.note)),
+    }),
+    transactions: router({
+      list: adminProcedure.query(() => listTransactions()),
+    }),
+    audit: router({
+      list: adminProcedure.query(() => listAuditLogs()),
+    }),
+    reports: router({
+      metrics: adminProcedure.query(() => getCommerceMetrics()),
+    }),
     settings: router({
-      save: adminProcedure.input(z.object({ businessName: z.string().min(1), whatsappNumber: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), businessHours: z.string().optional(), mapsUrl: z.string().optional(), instagramUrl: z.string().url().optional(), youtubeUrl: z.string().url().optional() })).mutation(({ input }) => saveSiteSettings(input).then(() => ({ success: true }))),
+      save: adminProcedure.input(z.object({ businessName: z.string().min(1), whatsappNumber: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), businessHours: z.string().optional(), mapsUrl: z.string().optional(), instagramUrl: z.string().url().optional(), youtubeUrl: z.string().url().optional(), shippingFee: z.number().int().nonnegative().optional() })).mutation(({ input }) => saveSiteSettings(input).then(() => ({ success: true }))),
     }),
   }),
 });
