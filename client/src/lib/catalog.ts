@@ -1,3 +1,6 @@
+import { billingCatalog } from "@shared/billingCatalog";
+import { categoriesForCatalog, defaultProductCategories } from "@shared/productCategories";
+
 export type Product = {
   id: string;
   dbId?: number;
@@ -11,11 +14,14 @@ export type Product = {
   accent: string;
   image: string;
   imageUrl?: string;
+  images?: string[];
   stockStatus?: string;
   stock?: number;
   lowStockThreshold?: number;
   specs: { label: string; value: string }[];
   featured?: boolean;
+  active?: boolean;
+  hidden?: boolean;
 };
 
 export type CartItem = Product & { quantity: number };
@@ -31,19 +37,19 @@ export type ComboKit = {
   items: { productSlug: string; quantity: number }[];
 };
 
-export const heroImage = "/haidronics-logo.png";
-export const logoImage = "/haidronics-logo.png";
-export const logoIconImage = "/haidronics-icon.png";
+export const heroImage = "/haidronics-brand.png";
+export const logoImage = "/haidronics-mark.png";
+export const logoIconImage = "/haidronics-mark.png";
 
-export const products: Product[] = [
+const starterProducts: Product[] = [
   {
     id: "esp32-devkit",
-    name: "ESP32 DevKit V1",
+    name: "ESP32",
     sku: "HD-ESP32-001",
-    price: 399,
+    price: 350,
     shortDescription: "Wi-Fi + Bluetooth development board for connected builds.",
     description: "A capable, compact development board for IoT prototypes, automation builds, sensor networks, and connected experiments.",
-    category: "Development boards",
+    category: "Boards",
     tags: ["esp32", "wifi", "bluetooth", "iot", "microcontroller"],
     accent: "#ff6b1a",
     image: "board",
@@ -57,9 +63,9 @@ export const products: Product[] = [
   },
   {
     id: "oled-096",
-    name: "0.96 inch OLED Display",
+    name: "OLED 0.96\" Display",
     sku: "HD-OLED-096",
-    price: 129,
+    price: 159,
     shortDescription: "Crisp I2C display for compact dashboards and prototypes.",
     description: "A bright monochrome OLED module that makes quick sensor readouts and portable interfaces easy to build.",
     category: "Displays",
@@ -76,9 +82,9 @@ export const products: Product[] = [
   },
   {
     id: "dht11",
-    name: "DHT11 Temperature Sensor",
+    name: "DHT11 Temp & Humidity Sensor",
     sku: "HD-DHT11-011",
-    price: 79,
+    price: 59,
     shortDescription: "A beginner-friendly temperature and humidity sensor module.",
     description: "A simple digital sensor for learning environments, climate monitors, plant projects, and first IoT builds.",
     category: "Sensors",
@@ -95,12 +101,12 @@ export const products: Product[] = [
   },
   {
     id: "arduino-uno",
-    name: "Arduino UNO R3",
+    name: "Arduino Uno",
     sku: "HD-UNO-R3",
-    price: 499,
+    price: 220,
     shortDescription: "The familiar starting point for classroom and prototype work.",
     description: "A dependable microcontroller board for learning embedded systems, controlling modules, and getting ideas moving.",
-    category: "Development boards",
+    category: "Boards",
     tags: ["arduino", "uno", "atmega328p", "microcontroller"],
     accent: "#ec5a42",
     image: "uno",
@@ -116,7 +122,7 @@ export const products: Product[] = [
     id: "ultrasonic",
     name: "HC-SR04 Ultrasonic Sensor",
     sku: "HD-HCSR04-004",
-    price: 99,
+    price: 79,
     shortDescription: "Non-contact distance sensing for robotics and automation.",
     description: "A classic ultrasonic module for obstacle detection, tank levels, robotics experiments, and interactive builds.",
     category: "Sensors",
@@ -150,7 +156,34 @@ export const products: Product[] = [
   },
 ];
 
-export const formatINR = (amount: number) => `₹${amount.toLocaleString("en-IN")}`;
+const starterProductSlugs = new Set(starterProducts.map((product) => product.id));
+
+export const products: Product[] = [
+  ...starterProducts,
+  ...billingCatalog
+    .filter((product) => !starterProductSlugs.has(product.slug))
+    .map((product): Product => ({
+      id: product.slug,
+      name: product.name,
+      sku: product.sku,
+      price: product.price,
+      shortDescription: `${product.name} from the HAIDRONICS component catalog.`,
+      description: `${product.name} for electronics projects, prototypes, and learning builds.`,
+      category: product.category,
+      tags: product.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+      accent: "#ff6417",
+      image: product.category === "Displays" ? "oled" : product.category === "Sensors" ? "sensor" : product.category === "Robotics" ? "relay" : "board",
+      stockStatus: "Out of stock",
+      stock: 0,
+      lowStockThreshold: 5,
+      specs: [],
+    })),
+];
+
+export const formatINR = (amount: number) => `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 })}`;
+
+export const moneyToPaise = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+export const paiseToMoney = (paise: number) => paise / 100;
 
 export const whatsappNumber = "918248453861";
 
@@ -177,8 +210,8 @@ export function productEnquiry(product: Product) {
 }
 
 export function cartMessage(items: CartItem[], customer?: { name: string; phone: string; address: string }, orderNumber?: string) {
-  const lines = items.map((item, index) => `${index + 1}. *${item.name}* (${item.sku})\n   Qty: ${item.quantity} × ${formatINR(item.price)} = ${formatINR(item.price * item.quantity)}`);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const lines = items.map((item, index) => `${index + 1}. *${item.name}* (${item.sku})\n   Qty: ${item.quantity} × ${formatINR(item.price)} = ${formatINR(paiseToMoney(moneyToPaise(item.price) * item.quantity))}`);
+  const subtotal = paiseToMoney(items.reduce((sum, item) => sum + moneyToPaise(item.price) * item.quantity, 0));
   const shipping = 50;
   const total = subtotal + shipping;
   const orderHeader = orderNumber ? `*Order Ref:* ${orderNumber}\n` : "";
@@ -214,9 +247,19 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
       id: String(row.slug || row.id || `product-${index}`),
       dbId: typeof row.id === "number" ? row.id : undefined,
       imageUrl: typeof row.imageUrl === "string" ? row.imageUrl : undefined,
-      stockStatus: String(row.stockStatus || "In stock"),
-      stock: Number(row.stock || 0),
-      lowStockThreshold: Number(row.lowStockThreshold || 5),
+      images: (() => {
+        try {
+          const parsed = typeof row.images === "string" ? JSON.parse(row.images) : row.images;
+          return Array.isArray(parsed)
+            ? parsed.filter((image): image is string => typeof image === "string" && image.length > 0).slice(0, 4)
+            : typeof row.imageUrl === "string" && row.imageUrl ? [row.imageUrl] : [];
+        } catch {
+          return typeof row.imageUrl === "string" && row.imageUrl ? [row.imageUrl] : [];
+        }
+      })(),
+      stockStatus: String(row.stockStatus || (typeof row.stock === "number" && row.stock <= 0 ? "Out of stock" : "In stock")),
+      stock: typeof row.stock === "number" ? row.stock : typeof row.availableQuantity === "number" ? row.availableQuantity : undefined,
+      lowStockThreshold: typeof row.lowStockThreshold === "number" ? row.lowStockThreshold : undefined,
       name: String(row.name || "Untitled component"),
       sku: String(row.sku || "HD-CATALOG"),
       price: Number(row.price || 0),
@@ -227,6 +270,8 @@ export function normalizeApiProducts(rows: Array<Record<string, unknown>> | unde
       accent: "#ff6417",
       image: String(row.slug || "").includes("oled") ? "oled" : String(row.slug || "").includes("dht") ? "sensor" : String(row.slug || "").includes("arduino") ? "uno" : String(row.slug || "").includes("ultrasonic") ? "ultrasonic" : String(row.slug || "").includes("relay") ? "relay" : "board",
       featured: Number(row.featured || 0) === 1,
+      active: Number(row.active ?? 1) === 1,
+      hidden: Number(row.hidden ?? 0) === 1,
       specs,
     };
   });
@@ -252,6 +297,7 @@ export function normalizeApiComboKits(rows: Array<Record<string, unknown>> | und
 export function recommendedProducts(product: Product, source: Product[]) {
   // Complementary category pairings (e.g. dev boards pair with displays, sensors, modules)
   const complementaryCategories: Record<string, string[]> = {
+    "Boards": ["Displays", "Sensors", "Modules"],
     "Development boards": ["Displays", "Sensors", "Modules"],
     "Sensors": ["Development boards", "Displays", "Modules"],
     "Displays": ["Development boards", "Sensors", "Modules"],
@@ -281,4 +327,8 @@ export function mergeProductSources(primary: Product[], fallback: Product[]) {
   return Array.from(merged.values());
 }
 
-export const categories = ["All", "Development boards", "Sensors", "Displays", "Modules"];
+export const categories = categoriesForCatalog(products.map((product) => product.category));
+
+export function categoriesForProducts(source: Product[]) {
+  return categoriesForCatalog(source.map((product) => product.category));
+}

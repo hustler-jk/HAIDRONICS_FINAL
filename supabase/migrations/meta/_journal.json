@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791566081872,
+      "tag": "0000_motionless_jack_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791570000000,
+      "tag": "0001_lock_down_public_api",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791570327881,
+      "tag": "0002_add_auth_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791637277146,
+      "tag": "0003_news_and_stock_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791639236382,
+      "tag": "0004_futuristic_carnage",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791652909621,
+      "tag": "0005_add_invoice_email_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791654000000,
+      "tag": "0006_import_billing_catalog_and_paise",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791686532420,
+      "tag": "0007_brave_lady_ursula",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791729134966,
+      "tag": "0008_aromatic_mentor",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791729707504,
+      "tag": "0009_dark_psynapse",
+      "breakpoints": true
+    }
+  ]
+}

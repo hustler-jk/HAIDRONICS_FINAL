@@ -1,32 +1,368 @@
 import { FormEvent, useState } from "react";
-import { ArrowUpRight, Check, MessageCircle, Send, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  MessageCircle,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useBusinessSettings } from "@/components/SiteShell";
 import { whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 
-const initialProject = { name: "", phone: "", project: "", building: "", components: "", budget: "" };
-const initialRequest = { component: "", quantity: "1", reference: "", notes: "" };
+const initialProject = {
+  name: "",
+  phone: "",
+  project: "",
+  building: "",
+  components: "",
+  budget: "",
+};
+const initialRequest = {
+  component: "",
+  quantity: "1",
+  reference: "",
+  notes: "",
+};
 
 export default function Support() {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const settings = useBusinessSettings();
-  const [mode, setMode] = useState<"project" | "request">(new URLSearchParams(window.location.search).get("mode") === "request" ? "request" : "project");
+  const trackEvent = trpc.analytics.track.useMutation();
+  const [mode, setMode] = useState<"project" | "request">(
+    new URLSearchParams(window.location.search).get("mode") === "request"
+      ? "request"
+      : "project"
+  );
   const [project, setProject] = useState(initialProject);
   const [request, setRequest] = useState(initialRequest);
   const [sent, setSent] = useState(false);
-  const projectMutation = trpc.requests.project.useMutation({ onSuccess: () => setSent(true) });
-  const productMutation = trpc.requests.product.useMutation({ onSuccess: () => setSent(true) });
+  const projectMutation = trpc.requests.project.useMutation({
+    onSuccess: () => setSent(true),
+  });
+  const productMutation = trpc.requests.product.useMutation({
+    onSuccess: () => setSent(true),
+  });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (mode === "project") projectMutation.mutate({ name: project.name, phone: project.phone, projectName: project.project, building: project.building, components: project.components, budget: project.budget });
-    else productMutation.mutate({ component: request.component, quantity: Number(request.quantity) || 1, reference: request.reference, notes: request.notes });
+    if (mode === "project")
+      projectMutation.mutate({
+        name: project.name,
+        phone: project.phone,
+        projectName: project.project,
+        building: project.building,
+        components: project.components,
+        budget: project.budget,
+      });
+    else
+      productMutation.mutate({
+        component: request.component,
+        quantity: Number(request.quantity) || 1,
+        reference: request.reference,
+        notes: request.notes,
+      });
   };
   const projectMessage = `Hi HAIDRONICS, I need project support.\n\nName: ${project.name}\nPhone / WhatsApp: ${project.phone}\nProject: ${project.project}\nWhat I’m building: ${project.building}\nComponents: ${project.components}\nBudget: ${project.budget}`;
   return (
-    <div className="min-h-[70vh]"><section className="border-b border-white/[0.08] bg-[#0d1012]"><div className="container grid gap-12 py-16 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-end"><div><p className="eyebrow text-orange-300">Open channel / support</p><h1 className="mt-4 max-w-xl font-display text-5xl leading-[0.93] tracking-[-0.05em] text-white md:text-7xl">Build with a<br /><span className="text-orange-400">clearer brief.</span></h1><p className="mt-7 max-w-md text-base leading-7 text-white/55">Not sure which components you need? Send a project outline or request a product that isn’t in the current index.</p></div><div className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10"><button type="button" onClick={() => { setMode("project"); setSent(false); }} className={`p-5 text-left transition-colors ${mode === "project" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}><Sparkles size={18} /><p className="mt-8 font-display text-xl">Project support</p><p className={`mt-2 text-xs leading-5 ${mode === "project" ? "text-black/60" : "text-white/45"}`}>Talk through the build.</p></button><button type="button" onClick={() => { setMode("request"); setSent(false); }} className={`p-5 text-left transition-colors ${mode === "request" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}><Send size={18} /><p className="mt-8 font-display text-xl">Request a product</p><p className={`mt-2 text-xs leading-5 ${mode === "request" ? "text-black/60" : "text-white/45"}`}>Flag a missing part.</p></button></div></div></section>
-      <section className="container grid gap-14 py-14 md:py-20 lg:grid-cols-[1fr_0.35fr]"><div className="max-w-2xl">{sent ? <div className="border border-orange-400/25 bg-[#14110e] p-8 md:p-12"><div className="grid size-12 place-items-center rounded-full bg-orange-500/15 text-orange-300"><Check /></div><p className="eyebrow mt-8 text-orange-300">Request drafted</p><h2 className="mt-3 font-display text-4xl text-white">Your brief is ready to send.</h2><p className="mt-4 max-w-md text-sm leading-6 text-white/55">For this V1, the handoff continues through WhatsApp so availability, final pricing, shipping, and delivery can be confirmed directly.</p><div className="mt-8 flex flex-wrap gap-3"><a href={whatsappLink(mode === "project" ? projectMessage : `Hi HAIDRONICS, I’d like to request a product.\n\nComponent: ${request.component}\nQuantity: ${request.quantity}\nReference: ${request.reference}\nAdditional information: ${request.notes}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"><MessageCircle size={15} /> Continue on WhatsApp</a><button type="button" onClick={() => setSent(false)} className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white/45 hover:text-white">Edit brief</button></div></div> : mode === "project" ? <form onSubmit={submit} className="space-y-5"><div className="grid gap-5 sm:grid-cols-2"><Field label="Name *" value={project.name} onChange={(value) => setProject({ ...project, name: value })} required /><Field label="Phone / WhatsApp *" value={project.phone} onChange={(value) => setProject({ ...project, phone: value })} required /></div><div className="grid gap-5 sm:grid-cols-2"><Field label="Project name" value={project.project} onChange={(value) => setProject({ ...project, project: value })} /><Field label="Approximate budget" value={project.budget} onChange={(value) => setProject({ ...project, budget: value })} placeholder="e.g. ₹3,000" /></div><TextareaField label="What are you building?" value={project.building} onChange={(value) => setProject({ ...project, building: value })} placeholder="A smart plant monitor, a line-following robot..." /><TextareaField label="Components you need" value={project.components} onChange={(value) => setProject({ ...project, components: value })} placeholder="List what you know so far — we can help with the rest." /><SubmitButton label="Create project brief" /></form> : <form onSubmit={submit} className="space-y-5"><Field label="Product / component *" value={request.component} onChange={(value) => setRequest({ ...request, component: value })} required /><div className="grid gap-5 sm:grid-cols-2"><Field label="Quantity" type="number" value={request.quantity} onChange={(value) => setRequest({ ...request, quantity: value })} /><Field label="Reference / product link" value={request.reference} onChange={(value) => setRequest({ ...request, reference: value })} /></div><TextareaField label="Additional information" value={request.notes} onChange={(value) => setRequest({ ...request, notes: value })} placeholder="Any voltage, size, compatibility, or deadline details." /><SubmitButton label="Create product request" /></form>}</div><aside className="border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8"><p className="eyebrow">How it works</p><div className="mt-6 space-y-6">{[["01", "Share the signal", "Give us the build context, not a perfect BOM."], ["02", "We map the parts", "We’ll help narrow down compatible options."], ["03", "Confirm the details", "Availability and final pricing stay human." ]].map(([number, title, body]) => <div key={number} className="flex gap-4"><span className="font-mono text-[10px] text-orange-300">{number}</span><div><p className="font-display text-lg text-white">{title}</p><p className="mt-1 text-sm leading-6 text-white/45">{body}</p></div></div>)}</div><Link href="/products" className="mt-10 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-orange-300 hover:text-white">Browse the catalog <ArrowUpRight size={14} /></Link></aside></section></div>
+    <div className="min-h-[70vh]">
+      <section className="border-b border-white/[0.08] bg-[#0d1012]">
+        <div className="container grid gap-12 py-16 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+          <div>
+            <p className="eyebrow text-orange-300">Open channel / support</p>
+            <h1 className="mt-4 max-w-xl font-display text-5xl leading-[0.93] tracking-[-0.05em] text-white md:text-7xl">
+              Build with a<br />
+              <span className="text-orange-400">clearer brief.</span>
+            </h1>
+            <p className="mt-7 max-w-md text-base leading-7 text-white/55">
+              Not sure which components you need? Send a project outline or
+              request a product that isn’t in the current index.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("project");
+                setSent(false);
+              }}
+              className={`p-5 text-left transition-colors ${mode === "project" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}
+            >
+              <Sparkles size={18} />
+              <p className="mt-8 font-display text-xl">Project support</p>
+              <p
+                className={`mt-2 text-xs leading-5 ${mode === "project" ? "text-black/60" : "text-white/45"}`}
+              >
+                Talk through the build.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("request");
+                setSent(false);
+              }}
+              className={`p-5 text-left transition-colors ${mode === "request" ? "bg-[#ff6417] text-black" : "bg-[#14181a] text-white"}`}
+            >
+              <Send size={18} />
+              <p className="mt-8 font-display text-xl">Request a product</p>
+              <p
+                className={`mt-2 text-xs leading-5 ${mode === "request" ? "text-black/60" : "text-white/45"}`}
+              >
+                Flag a missing part.
+              </p>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section className="container grid gap-14 py-14 md:py-20 lg:grid-cols-[1fr_0.35fr]">
+        <div className="max-w-2xl">
+          {authLoading ? (
+            <div className="rounded-lg border border-white/10 bg-[#101315] p-8 text-sm text-white/55">
+              Checking your sign-in…
+            </div>
+          ) : !isAuthenticated ? (
+            <div className="rounded-lg border border-orange-400/25 bg-[#111416] p-8 md:p-12">
+              <p className="eyebrow text-orange-300">Customer account required</p>
+              <h2 className="mt-3 font-display text-3xl text-white">
+                Sign in to send a request.
+              </h2>
+              <p className="mt-4 max-w-md text-sm leading-6 text-white/55">
+                Sign in or create a customer account to submit project details
+                and product requests. You can browse the catalog without an
+                account.
+              </p>
+              <Link
+                href={`/account?next=${encodeURIComponent(mode === "request" ? "/support?mode=request" : "/support")}`}
+                className="mt-7 inline-flex items-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400"
+              >
+                Sign in or create account <ArrowUpRight size={14} />
+              </Link>
+            </div>
+          ) : sent ? (
+            <div className="border border-orange-400/25 bg-[#14110e] p-8 md:p-12">
+              <div className="grid size-12 place-items-center rounded-full bg-orange-500/15 text-orange-300">
+                <Check />
+              </div>
+              <p className="eyebrow mt-8 text-orange-300">Request drafted</p>
+              <h2 className="mt-3 font-display text-4xl text-white">
+                Your brief is ready to send.
+              </h2>
+              <p className="mt-4 max-w-md text-sm leading-6 text-white/55">
+                For this V1, the handoff continues through WhatsApp so
+                availability, final pricing, shipping, and delivery can be
+                confirmed directly.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a
+                  href={whatsappLink(
+                    mode === "project"
+                      ? projectMessage
+                      : `Hi HAIDRONICS, I’d like to request a product.\n\nComponent: ${request.component}\nQuantity: ${request.quantity}\nReference: ${request.reference}\nAdditional information: ${request.notes}`
+                  )}
+                  onClick={() => trackEvent.mutate({ event: "whatsapp_click", path: "/support" })}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black"
+                >
+                  <MessageCircle size={15} /> Continue on WhatsApp
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSent(false)}
+                  className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white/45 hover:text-white"
+                >
+                  Edit brief
+                </button>
+              </div>
+            </div>
+          ) : mode === "project" ? (
+            <form onSubmit={submit} className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Name *"
+                  value={project.name}
+                  onChange={value => setProject({ ...project, name: value })}
+                  required
+                />
+                <Field
+                  label="Phone / WhatsApp *"
+                  value={project.phone}
+                  onChange={value => setProject({ ...project, phone: value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Project name"
+                  value={project.project}
+                  onChange={value => setProject({ ...project, project: value })}
+                />
+                <Field
+                  label="Approximate budget"
+                  value={project.budget}
+                  onChange={value => setProject({ ...project, budget: value })}
+                  placeholder="e.g. ₹3,000"
+                />
+              </div>
+              <TextareaField
+                label="What are you building?"
+                value={project.building}
+                onChange={value => setProject({ ...project, building: value })}
+                placeholder="A smart plant monitor, a line-following robot..."
+              />
+              <TextareaField
+                label="Components you need"
+                value={project.components}
+                onChange={value =>
+                  setProject({ ...project, components: value })
+                }
+                placeholder="List what you know so far — we can help with the rest."
+              />
+              <SubmitButton label="Create project brief" />
+            </form>
+          ) : (
+            <form onSubmit={submit} className="space-y-5">
+              <Field
+                label="Product / component *"
+                value={request.component}
+                onChange={value => setRequest({ ...request, component: value })}
+                required
+              />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Quantity"
+                  type="number"
+                  value={request.quantity}
+                  onChange={value =>
+                    setRequest({ ...request, quantity: value })
+                  }
+                />
+                <Field
+                  label="Reference / product link"
+                  value={request.reference}
+                  onChange={value =>
+                    setRequest({ ...request, reference: value })
+                  }
+                />
+              </div>
+              <TextareaField
+                label="Additional information"
+                value={request.notes}
+                onChange={value => setRequest({ ...request, notes: value })}
+                placeholder="Any voltage, size, compatibility, or deadline details."
+              />
+              <SubmitButton label="Create product request" />
+            </form>
+          )}
+        </div>
+        <aside className="border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8">
+          <p className="eyebrow">How it works</p>
+          <div className="mt-6 space-y-6">
+            {[
+              [
+                "01",
+                "Share the signal",
+                "Give us the build context, not a perfect BOM.",
+              ],
+              [
+                "02",
+                "We map the parts",
+                "We’ll help narrow down compatible options.",
+              ],
+              [
+                "03",
+                "Confirm the details",
+                "Availability and final pricing stay human.",
+              ],
+            ].map(([number, title, body]) => (
+              <div key={number} className="flex gap-4">
+                <span className="font-mono text-[10px] text-orange-300">
+                  {number}
+                </span>
+                <div>
+                  <p className="font-display text-lg text-white">{title}</p>
+                  <p className="mt-1 text-sm leading-6 text-white/45">{body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link
+            href="/products"
+            className="mt-10 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-orange-300 hover:text-white"
+          >
+            Browse the catalog <ArrowUpRight size={14} />
+          </Link>
+        </aside>
+      </section>
+    </div>
   );
 }
-function Field({ label, value, onChange, placeholder, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; required?: boolean }) { return <label className="block"><span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">{label}</span><input required={required} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-12 w-full rounded-sm border border-white/15 bg-[#111416] px-4 text-sm text-white outline-none placeholder:text-white/20 focus:border-orange-400/70" /></label>; }
-function TextareaField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) { return <label className="block"><span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={4} className="w-full resize-none rounded-sm border border-white/15 bg-[#111416] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/20 focus:border-orange-400/70" /></label>; }
-function SubmitButton({ label }: { label: string }) { return <button type="submit" className="inline-flex items-center gap-3 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-black hover:bg-orange-300 active:scale-[0.98]">{label} <ArrowUpRight size={15} /></button>; }
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+        {label}
+      </span>
+      <input
+        required={required}
+        type={type}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-12 w-full rounded-sm border border-white/15 bg-[#111416] px-4 text-sm text-white outline-none placeholder:text-white/20 focus:border-orange-400/70"
+      />
+    </label>
+  );
+}
+function TextareaField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+        {label}
+      </span>
+      <textarea
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        className="w-full resize-none rounded-sm border border-white/15 bg-[#111416] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/20 focus:border-orange-400/70"
+      />
+    </label>
+  );
+}
+function SubmitButton({ label }: { label: string }) {
+  return (
+    <button
+      type="submit"
+      className="inline-flex items-center gap-3 rounded-sm bg-[#ff6417] px-5 py-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-black hover:bg-orange-300 active:scale-[0.98]"
+    >
+      {label} <ArrowUpRight size={15} />
+    </button>
+  );
+}

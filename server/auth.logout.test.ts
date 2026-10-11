@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { COOKIE_NAME } from "../shared/const";
+import { COOKIE_NAME, REFRESH_COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
+import { getSessionCookieOptions } from "./_core/cookies";
 
 type CookieCall = {
   name: string;
@@ -49,14 +50,40 @@ describe("auth.logout", () => {
     const result = await caller.auth.logout();
 
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
+    expect(clearedCookies).toHaveLength(2);
     expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
     expect(clearedCookies[0]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });
+    expect(clearedCookies[1]).toEqual({
+      name: REFRESH_COOKIE_NAME,
+      options: expect.objectContaining({
+        maxAge: -1,
+        secure: true,
+        sameSite: "lax",
+        httpOnly: true,
+        path: "/api",
+      }),
+    });
+  });
+
+  it("uses a cookie policy that works on local HTTP and secure deployments", () => {
+    expect(getSessionCookieOptions({
+      protocol: "http",
+      headers: {},
+    } as Parameters<typeof getSessionCookieOptions>[0])).toMatchObject({
+      sameSite: "lax",
+      secure: false,
+      httpOnly: true,
+      path: "/",
+    });
+    expect(getSessionCookieOptions({
+      protocol: "http",
+      headers: { "x-forwarded-proto": "https" },
+    } as Parameters<typeof getSessionCookieOptions>[0]).secure).toBe(true);
   });
 });

@@ -1,17 +1,21 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Loader2, MessageCircle, Minus, Plus, ShieldCheck, ShoppingBag, Trash2, UserRound } from "lucide-react";
 import { Link } from "wouter";
 import { useBusinessSettings, useCart } from "@/components/SiteShell";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { cartMessage, formatINR, whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const settings = useBusinessSettings();
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [showCheckout, setShowCheckout] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [orderResult, setOrderResult] = useState<{ orderNumber: string; total: number; subtotal: number; shipping: number } | null>(null);
+  const whatsappPopup = useRef<Window | null>(null);
+  const trackEvent = trpc.analytics.track.useMutation();
 
   const createOrder = trpc.checkout.create.useMutation({
     onSuccess: (result) => {
@@ -20,9 +24,15 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
       toast.success(`Order ${result.orderNumber} created successfully!`);
       const fullMessage = cartMessage(cart.items, customer, result.orderNumber);
       const url = whatsappLink(fullMessage, settings.whatsappNumber);
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (whatsappPopup.current && !whatsappPopup.current.closed) {
+        trackEvent.mutate({ event: "whatsapp_click", path: "/cart" });
+        whatsappPopup.current.location.href = url;
+      }
+      whatsappPopup.current = null;
     },
     onError: (err) => {
+      whatsappPopup.current?.close();
+      whatsappPopup.current = null;
       toast.error(err.message || "Failed to submit order request");
     },
   });
@@ -34,6 +44,11 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
       return;
     }
 
+    // Open a blank tab during the click gesture so popup blockers allow the
+    // WhatsApp redirect after the order request finishes asynchronously.
+    whatsappPopup.current = window.open("about:blank", "_blank");
+    if (whatsappPopup.current) whatsappPopup.current.opener = null;
+
     createOrder.mutate({
       customerName: customer.name,
       phone: customer.phone,
@@ -42,7 +57,8 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
     });
   };
 
-  const shippingFee = 50;
+  const shippingFee = settings.shippingFee;
+  const unavailableItems = cart.items.filter(item => item.stockStatus === "Out of stock");
   const estimatedTotal = cart.total + shippingFee;
 
   return (
@@ -51,7 +67,7 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
         <ArrowLeft size={14} /> Continue browsing
       </Link>
 
-      <div className="mt-8 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 md:flex-row md:items-end">
+      <div className="cart-heading mt-8 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 md:flex-row md:items-end">
         <div>
           <p className="eyebrow text-orange-300">Selection / WhatsApp order flow</p>
           <h1 className="mt-3 font-display text-5xl tracking-[-0.05em] text-white md:text-7xl">
@@ -75,11 +91,11 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-12 pt-10 lg:grid-cols-[1fr_0.45fr]">
+        <div className="cart-layout grid gap-12 pt-10 lg:grid-cols-[1fr_0.45fr]">
           {/* Cart Items List */}
           <div className="space-y-4">
             {cart.items.map((item) => (
-              <div key={item.id} className="flex flex-col gap-4 rounded-lg border border-white/[0.08] bg-[#0d1012] p-4 sm:flex-row sm:items-center sm:p-5">
+              <div key={item.id} className="cart-line-item flex flex-col gap-4 rounded-lg border border-white/[0.08] bg-[#0d1012] p-4 sm:flex-row sm:items-center sm:p-5">
                 <div className="product-mini-art" data-variant={item.image}>
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
@@ -95,9 +111,10 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
                   <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
                     {item.sku} · {formatINR(item.price)} each
                   </p>
+                  {item.stockStatus === "Out of stock" && <p className="mt-2 font-mono text-[9px] font-bold uppercase tracking-wider text-red-300">Out of stock — remove to continue</p>}
                 </div>
 
-                <div className="flex items-center justify-between gap-6 sm:justify-end">
+                <div className="cart-item-controls flex items-center justify-between gap-6 sm:justify-end">
                   {/* Quantity Stepper */}
                   <div className="flex items-center gap-2 rounded border border-white/15 bg-white/5 px-2 py-1">
                     <button
@@ -147,7 +164,7 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
           </div>
 
           {/* Checkout / Order Summary Box */}
-          <aside className="h-fit rounded-xl border border-orange-400/30 bg-[#121518] p-6 shadow-2xl">
+          <aside className="cart-summary h-fit rounded-xl border border-orange-400/30 bg-[#121518] p-6 shadow-2xl">
             <p className="eyebrow text-orange-300">Order Summary</p>
 
             <div className="mt-6 space-y-3 border-b border-white/10 pb-5 text-sm">
@@ -179,6 +196,7 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
 
                 <a
                   href={whatsappLink(cartMessage(cart.items, customer, orderResult.orderNumber), settings.whatsappNumber)}
+                  onClick={() => trackEvent.mutate({ event: "whatsapp_click", path: "/cart" })}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-black hover:bg-emerald-400 transition-colors"
@@ -186,21 +204,32 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
                   <MessageCircle size={16} /> Open WhatsApp Chat Now
                 </a>
               </div>
-            ) : !showCheckout ? (
+            ) : !showCheckout || !isAuthenticated ? (
               <div className="mt-6 space-y-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCheckout(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 transition-colors"
-                >
-                  <UserRound size={15} /> Proceed to checkout
-                </button>
+                {isAuthenticated ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckout(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 transition-colors"
+                  >
+                    <UserRound size={15} /> Proceed to checkout
+                  </button>
+                ) : (
+                  <Link
+                    href="/account?next=%2Fcart"
+                    aria-disabled={authLoading}
+                    className={`flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black transition-colors ${authLoading ? "pointer-events-none opacity-60" : "hover:bg-orange-400"}`}
+                  >
+                    <UserRound size={15} /> {authLoading ? "Checking account..." : "Sign in to checkout"}
+                  </Link>
+                )}
                 <p className="text-center font-mono text-[9px] uppercase tracking-[0.12em] text-white/35 flex items-center justify-center gap-1.5">
                   <ShieldCheck size={12} className="text-orange-400" /> WhatsApp Hand-off with Order Ledger
                 </p>
               </div>
             ) : (
               <form onSubmit={submitCheckout} className="mt-6 space-y-4">
+                {unavailableItems.length > 0 && <p role="alert" className="rounded-md border border-red-400/25 bg-red-400/5 p-3 text-xs leading-5 text-red-200">Some items are unavailable or over current stock. Remove them or lower their quantity before placing this order.</p>}
                 <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-300">
                   Enter delivery details
                 </p>
@@ -242,7 +271,7 @@ export default function Cart({ cart }: { cart: ReturnType<typeof useCart> }) {
 
                 <button
                   type="submit"
-                  disabled={createOrder.isPending}
+                  disabled={createOrder.isPending || unavailableItems.length > 0}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6417] px-5 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 disabled:opacity-50 transition-colors"
                 >
                   {createOrder.isPending ? (

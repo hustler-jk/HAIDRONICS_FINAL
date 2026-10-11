@@ -1,25 +1,42 @@
 import { Link, useLocation } from "wouter";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { ArrowUpRight, ChevronRight, Menu, MessageCircle, Search, ShoppingBag, UserRound, X, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, whatsappLink } from "@/lib/catalog";
+import { CartItem, Product, cartMessage, formatINR, logoIconImage, logoImage, moneyToPaise, normalizeApiProducts, paiseToMoney, whatsappLink } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 const emptyCart: CartItem[] = [];
-export type BusinessSettings = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string; youtubeUrl: string };
-const defaultBusinessSettings: BusinessSettings = { businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics", youtubeUrl: "https://www.youtube.com/@haidenlabs" };
+export type BusinessSettings = { businessName: string; whatsappNumber: string; phone: string; email: string; address: string; businessHours: string; mapsUrl: string; instagramUrl: string; youtubeUrl: string; shippingFee: number };
+const defaultBusinessSettings: BusinessSettings = { businessName: "HAIDRONICS", whatsappNumber: "918248453861", phone: "", email: "", address: "", businessHours: "", mapsUrl: "", instagramUrl: "https://www.instagram.com/haidronics", youtubeUrl: "https://www.youtube.com/@haidenlabs", shippingFee: 50 };
 const BusinessSettingsContext = createContext<BusinessSettings>(defaultBusinessSettings);
 export function useBusinessSettings() { return useContext(BusinessSettingsContext); }
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="group inline-flex items-center gap-3" aria-label="HAIDRONICS home">
-      <img src={logoIconImage} alt="HAIDRONICS" className="h-11 w-auto rounded-md object-contain transition-transform group-hover:scale-105" />
+    <Link href="/" className="group inline-flex items-center gap-2.5" aria-label="HAIDRONICS home">
+      <img
+        src={logoImage}
+        alt=""
+        aria-hidden="true"
+        className={`${compact ? "size-8" : "size-10"} shrink-0 object-contain transition-opacity group-hover:opacity-80`}
+      />
+      <span className="flex flex-col">
+        <span className="font-display text-[17px] font-bold tracking-[0.11em] text-white sm:text-lg">HAIDRONICS</span>
+        <span className="hidden font-mono text-[8px] uppercase tracking-[0.14em] text-orange-300/80 sm:block">Where Engineering Starts</span>
+      </span>
     </Link>
   );
 }
 
 export function useCart() {
+  const { data: catalogRows } = trpc.catalog.list.useQuery(undefined, { refetchInterval: 45_000 });
+  const trackEvent = trpc.analytics.track.useMutation();
+  const liveProducts = useMemo(
+    () => new Map(normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined).map((product) => [product.id, product])),
+    [catalogRows]
+  );
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("haidronics-cart") || "[]");
@@ -32,23 +49,67 @@ export function useCart() {
     localStorage.setItem("haidronics-cart", JSON.stringify(items));
   }, [items]);
 
-  const add = (product: Product) => {
+  useEffect(() => {
+    if (!catalogRows) return;
     setItems((current) => {
-      const existing = current.find((item) => item.id === product.id);
-      return existing
-        ? current.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-        : [...current, { ...product, quantity: 1 }];
+      let changed = false;
+      const updated = current.map((item) => {
+        const latest = liveProducts.get(item.id);
+        if (!latest) {
+          if (item.stockStatus === "Out of stock") return item;
+          changed = true;
+          return { ...item, stock: 0, stockStatus: "Out of stock" };
+        }
+        const needsUpdate = item.price !== latest.price
+          || item.name !== latest.name
+          || item.sku !== latest.sku
+          || item.stock !== latest.stock
+          || item.stockStatus !== latest.stockStatus
+          || item.imageUrl !== latest.imageUrl
+          || JSON.stringify(item.images || []) !== JSON.stringify(latest.images || []);
+        if (!needsUpdate) return item;
+        changed = true;
+        return { ...item, ...latest, quantity: item.quantity };
+      });
+      return changed ? updated : current;
     });
+  }, [catalogRows, liveProducts]);
+
+  const add = (product: Product, quantity = 1) => {
+    const currentProduct = liveProducts.get(product.id) || product;
+    const existingItem = items.find((item) => item.id === currentProduct.id);
+    if (currentProduct.stockStatus === "Out of stock" || currentProduct.stock === 0) {
+      toast.error(`${currentProduct.name} is out of stock.`);
+      return false;
+    }
+    if (currentProduct.stockStatus === "Limited" && currentProduct.stock !== undefined && (existingItem?.quantity || 0) + quantity > currentProduct.stock) {
+      toast.error(`Only ${currentProduct.stock} ${currentProduct.name} available.`);
+      return false;
+    }
+    setItems((current) => {
+      const existing = current.find((item) => item.id === currentProduct.id);
+      return existing
+        ? current.map((item) => item.id === currentProduct.id ? { ...currentProduct, quantity: item.quantity + quantity } : item)
+        : [...current, { ...currentProduct, quantity }];
+    });
+    trackEvent.mutate({ event: "add_to_cart", productId: currentProduct.id });
+    return true;
   };
   const remove = (id: string) => setItems((current) => current.filter((item) => item.id !== id));
   const changeQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) return remove(id);
+    const item = items.find((entry) => entry.id === id);
+    if (item?.stockStatus === "Limited" && item.stock !== undefined && quantity > item.stock) {
+      toast.error(`Only ${item.stock} ${item.name} available.`);
+      return;
+    }
     setItems((current) => current.map((item) => item.id === id ? { ...item, quantity } : item));
   };
   const clear = () => setItems([]);
+  const trackWhatsApp = (path: string) => trackEvent.mutate({ event: "whatsapp_click", path });
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  return { items, add, remove, changeQuantity, clear, count, total };
+  const total = paiseToMoney(items.reduce((sum, item) => sum + moneyToPaise(item.price) * item.quantity, 0));
+  return { items, add, remove, changeQuantity, clear, count, total, trackWhatsApp };
 }
 
 export default function SiteShell({ children, cart }: { children: React.ReactNode; cart: ReturnType<typeof useCart> }) {
@@ -57,8 +118,9 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
   const [cartOpen, setCartOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSent, setNewsletterSent] = useState(false);
-  const { data: storedSettings } = trpc.catalog.settings.useQuery();
-  const businessSettings: BusinessSettings = { businessName: storedSettings?.businessName || defaultBusinessSettings.businessName, whatsappNumber: storedSettings?.whatsappNumber || defaultBusinessSettings.whatsappNumber, phone: storedSettings?.phone || "", email: storedSettings?.email || "", address: storedSettings?.address || "", businessHours: storedSettings?.businessHours || "", mapsUrl: storedSettings?.mapsUrl || "", instagramUrl: storedSettings?.instagramUrl || defaultBusinessSettings.instagramUrl, youtubeUrl: storedSettings?.youtubeUrl || defaultBusinessSettings.youtubeUrl };
+  const { isAuthenticated } = useAuth();
+  const { data: storedSettings } = trpc.catalog.settings.useQuery(undefined, { refetchInterval: 60_000 });
+  const businessSettings: BusinessSettings = { businessName: storedSettings?.businessName || defaultBusinessSettings.businessName, whatsappNumber: storedSettings?.whatsappNumber || defaultBusinessSettings.whatsappNumber, phone: storedSettings?.phone || "", email: storedSettings?.email || "", address: storedSettings?.address || "", businessHours: storedSettings?.businessHours || "", mapsUrl: storedSettings?.mapsUrl || "", instagramUrl: storedSettings?.instagramUrl || defaultBusinessSettings.instagramUrl, youtubeUrl: storedSettings?.youtubeUrl || defaultBusinessSettings.youtubeUrl, shippingFee: Number(storedSettings?.shippingFee ?? defaultBusinessSettings.shippingFee) };
   const newsletter = trpc.newsletter.subscribe.useMutation({ onSuccess: () => { setNewsletterSent(true); setNewsletterEmail(""); } });
   const navItems = [
     ["Products", "/products"],
@@ -76,7 +138,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
 
   return (
     <BusinessSettingsContext.Provider value={businessSettings}>
-    <div className="min-h-screen bg-[#090b0d] text-[#f6f3ee] selection:bg-orange-500/30">
+    <div className="storefront-shell min-h-screen text-[#f6f3ee] selection:bg-orange-500/30">
       <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#090b0d]/90 backdrop-blur-xl">
         <div className="container flex h-[74px] items-center justify-between gap-5">
           <BrandMark />
@@ -92,7 +154,7 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
               <ShoppingBag size={18} strokeWidth={1.7} />
               {cart.count > 0 && <span className="absolute -right-1.5 -top-1.5 grid size-4 place-items-center rounded-full bg-[#ff6417] font-mono text-[9px] font-bold text-black">{cartLabel}</span>}
             </button>
-            <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full bg-[#ff6417] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-black transition-transform hover:-translate-y-0.5 active:scale-95 md:inline-flex">
+            <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} onClick={() => cart.trackWhatsApp(location)} target="_blank" rel="noreferrer" className="hidden items-center gap-2 rounded-full bg-[#ff6417] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-black transition-transform hover:-translate-y-0.5 active:scale-95 md:inline-flex">
               <MessageCircle size={15} /> WhatsApp
             </a>
             <button type="button" className="icon-button lg:hidden" aria-label="Open menu" onClick={() => setMenuOpen((open) => !open)}>
@@ -105,21 +167,20 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
             <nav className="container flex flex-col gap-1">
               {navItems.map(([label, href]) => <Link key={href} href={href} className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">{label}</Link>)}
               <Link href="/account" className="rounded-md px-2 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white/65 hover:bg-white/5 hover:text-orange-300">Account / sign in</Link>
-              <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-md bg-[#ff6417] px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-black"><MessageCircle size={15} /> Chat on WhatsApp</a>
+              <a href={whatsappLink("Hi HAIDRONICS, I have a question about your products.", businessSettings.whatsappNumber)} onClick={() => cart.trackWhatsApp(location)} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-md bg-[#ff6417] px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.16em] text-black"><MessageCircle size={15} /> Chat on WhatsApp</a>
             </nav>
           </div>
         )}
       </header>
 
-      <main>{children}</main>
+      <main className={cart.count > 0 && location !== "/cart" ? "pb-24 md:pb-0" : ""}>{children}</main>
 
       <footer className="border-t border-white/[0.08] bg-[#070809]">
         <div className="container grid gap-12 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <BrandMark />
-            <img src={logoImage} alt="HAIDRONICS — Where Engineering Starts" className="mt-6 h-20 w-36 object-contain object-left opacity-70" />
-            <p className="mt-5 max-w-xs text-sm leading-6 text-white/46">A focused parts catalog for builders, students, and teams moving from first sketch to working prototype.</p>
-            <div className="mt-7 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-orange-300/80"><span className="h-px w-8 bg-orange-500" /> cloud catalog / v1</div>
+            <p className="mt-5 max-w-xs text-sm leading-6 text-white/46">Electronics components, sourcing, and engineering support for practical builds.</p>
+            <div className="mt-7 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-orange-300/80"><span className="h-px w-8 bg-orange-500" /> Electronics · IoT · Engineering</div>
           </div>
           <div>
             <p className="eyebrow mb-5">Explore</p>
@@ -137,12 +198,23 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
           <div>
             <p className="eyebrow mb-5">Build notes / occasional</p>
             <p className="max-w-[250px] text-sm leading-6 text-white/55">Get practical component drops and build notes. No noise.</p>
-            {newsletterSent ? <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.13em] text-emerald-300">You’re on the list.</p> : <form className="mt-5 flex max-w-[280px] gap-2" onSubmit={(event) => { event.preventDefault(); newsletter.mutate({ email: newsletterEmail }); }}><input type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="you@example.com" className="h-10 min-w-0 flex-1 border border-white/15 bg-white/[0.04] px-3 text-xs text-white outline-none focus:border-orange-400" /><button type="submit" disabled={newsletter.isPending} className="h-10 bg-orange-500 px-3 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-black">Join</button></form>}
+            {newsletterSent ? (
+              <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.13em] text-emerald-300">You’re on the list.</p>
+            ) : isAuthenticated ? (
+              <form className="mt-5 flex max-w-[280px] gap-2" onSubmit={(event) => { event.preventDefault(); newsletter.mutate({ email: newsletterEmail }); }}>
+                <input type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="you@example.com" className="h-10 min-w-0 flex-1 border border-white/15 bg-white/[0.04] px-3 text-xs text-white outline-none focus:border-orange-400" />
+                <button type="submit" disabled={newsletter.isPending} className="h-10 bg-orange-500 px-3 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-black">Join</button>
+              </form>
+            ) : (
+              <Link href={`/account?next=${encodeURIComponent(location)}`} className="mt-5 inline-flex font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-orange-300 hover:text-white">
+                Sign in to join the list
+              </Link>
+            )}
           </div>
           <div>
             <p className="eyebrow mb-5">Need a hand?</p>
             <p className="max-w-[220px] text-sm leading-6 text-white/55">Send a product question or project brief. We’ll continue the conversation on WhatsApp.</p>
-            <a href={whatsappLink("Hi HAIDRONICS, I need help choosing components.", businessSettings.whatsappNumber)} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-orange-300 hover:text-white">Start a conversation <ArrowUpRight size={14} /></a>
+            <a href={whatsappLink("Hi HAIDRONICS, I need help choosing components.", businessSettings.whatsappNumber)} onClick={() => cart.trackWhatsApp(location)} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-orange-300 hover:text-white">Start a conversation <ArrowUpRight size={14} /></a>
             <div className="mt-6 grid gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">{businessSettings.email && <a href={`mailto:${businessSettings.email}`} className="hover:text-orange-300">Email / {businessSettings.email}</a>}<a href={businessSettings.instagramUrl} target="_blank" rel="noreferrer" className="hover:text-orange-300">Instagram / @haidronics</a><a href={businessSettings.youtubeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-orange-300"><Youtube size={13} /> YouTube / Haiden Labs</a></div>
           </div>
         </div>
@@ -151,6 +223,13 @@ export default function SiteShell({ children, cart }: { children: React.ReactNod
           <span>Product availability and final pricing confirmed on enquiry</span>
         </div>
       </footer>
+
+      {cart.count > 0 && location !== "/cart" && (
+        <div className="fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl border border-orange-300/35 bg-[#111619]/95 p-3 shadow-[0_18px_60px_rgba(0,0,0,.55)] backdrop-blur-xl md:inset-x-auto md:bottom-6 md:right-6 md:mx-0 md:w-[380px]">
+          <div className="min-w-0"><p className="font-mono text-[9px] uppercase tracking-[.14em] text-white/45">{cart.count} item{cart.count === 1 ? "" : "s"} in your cart</p><p className="truncate font-mono text-sm font-bold text-orange-300">{formatINR(cart.total)}</p></div>
+          <Link href="/cart" className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#ff6417] px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[.12em] text-black hover:bg-orange-300">Buy now <ArrowUpRight size={14} /></Link>
+        </div>
+      )}
 
       {cartOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={() => setCartOpen(false)}>

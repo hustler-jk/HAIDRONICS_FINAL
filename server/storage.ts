@@ -3,6 +3,8 @@
 // Downloads return /manus-storage/{key} paths served via 307 redirect.
 
 import { ENV } from "./_core/env";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve, sep } from "node:path";
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -33,8 +35,35 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
+  if (ENV.supabaseUrl && ENV.supabaseServiceRoleKey) {
+    const bucket = ENV.supabaseStorageBucket || "haidronics-media";
+    const uploadUrl = `${ENV.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/${encodeURIComponent(bucket)}/${key.split("/").map(encodeURIComponent).join("/")}`;
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ENV.supabaseServiceRoleKey}`,
+        apikey: ENV.supabaseServiceRoleKey,
+        "Content-Type": contentType,
+        "x-upsert": "false",
+      },
+      body: typeof data === "string" ? data : new Blob([data as any], { type: contentType }),
+    });
+    if (!response.ok) {
+      const details = (await response.text()).slice(0, 400);
+      throw new Error(`Supabase Storage upload failed (${response.status}): ${details}`);
+    }
+    return { key, url: `${ENV.supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${encodeURIComponent(bucket)}/${key.split("/").map(encodeURIComponent).join("/")}` };
+  }
+  if (!ENV.isProduction && (!ENV.forgeApiUrl || !ENV.forgeApiKey)) {
+    const publicDir = resolve(process.cwd(), "client", "public", "uploads");
+    const filePath = resolve(publicDir, key);
+    if (!filePath.startsWith(`${publicDir}${sep}`)) throw new Error("Invalid upload path.");
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, typeof data === "string" ? data : data);
+    return { key, url: `/uploads/${key.split("/").map(encodeURIComponent).join("/")}` };
+  }
+  const { forgeUrl, forgeKey } = getForgeConfig();
 
   // 1. Get presigned PUT URL from Forge
   const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");

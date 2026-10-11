@@ -1,9 +1,9 @@
-import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS, decodeOAuthState } from "@shared/const";
+import { ACCESS_TOKEN_TTL_MS, AXIOS_TIMEOUT_MS, COOKIE_NAME, decodeOAuthState } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
-import { SignJWT, jwtVerify } from "jose";
+import { errors as joseErrors, SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
@@ -22,6 +22,7 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+  sessionId?: number;
 };
 
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
@@ -30,12 +31,6 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
-    }
   }
 
   private decodeState(state: string): string {
@@ -154,8 +149,10 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret || "haidronics-secure-local-secret-key-32-chars";
-    return new TextEncoder().encode(secret);
+    if (ENV.cookieSecret.length < 32) {
+      throw new Error("JWT_SECRET must be configured with at least 32 characters.");
+    }
+    return new TextEncoder().encode(ENV.cookieSecret);
   }
 
   /**
@@ -163,7 +160,7 @@ class SDKServer {
    */
   async createSessionToken(
     openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    options: { expiresInMs?: number; name?: string; sessionId?: number } = {}
   ): Promise<string> {
     return this.signSession(
       {
@@ -177,28 +174,28 @@ class SDKServer {
 
   async signSession(
     payload: SessionPayload,
-    options: { expiresInMs?: number } = {}
+    options: { expiresInMs?: number; sessionId?: number } = {}
   ): Promise<string> {
     const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
+    const expiresInMs = options.expiresInMs ?? ACCESS_TOKEN_TTL_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
-    return new SignJWT({
+    const jwt = new SignJWT({
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
+      ...(options.sessionId !== undefined ? { sid: options.sessionId } : {}),
     })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-      .setExpirationTime(expirationSeconds)
-      .sign(secretKey);
+      .setExpirationTime(expirationSeconds);
+    return jwt.sign(secretKey);
   }
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<{ openId: string; appId: string; name: string; sessionId?: number } | null> {
     if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
       return null;
     }
 
@@ -222,8 +219,12 @@ class SDKServer {
         openId,
         appId,
         name,
+        ...(typeof payload.sid === "number" && Number.isSafeInteger(payload.sid)
+          ? { sessionId: payload.sid }
+          : {}),
       };
     } catch (error) {
+      if (error instanceof joseErrors.JWTExpired) return null;
       console.warn("[Auth] Session verification failed", String(error));
       return null;
     }
@@ -283,36 +284,17 @@ class SDKServer {
       return buildCronUser(userInfo);
     }
 
-    const sessionUserId = session.openId;
+    if (session.sessionId === undefined) {
+      throw ForbiddenError("Session is not backed by an active server session");
+    }
     const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
-
-    // If user not in DB, sync from OAuth server automatically
+    const user = await db.getUserForAuthSession(session.sessionId, signedInAt);
     if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
+      throw ForbiddenError("Session has expired or was revoked");
     }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
+    if (user.openId !== session.openId) {
+      throw ForbiddenError("Session user does not match token");
     }
-
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
 
     return user;
   }

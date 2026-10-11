@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Cpu, Layers3, MessageCircle, Minus, Package, Plus, ShieldCheck, ShoppingBag, Sparkles, Zap } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { ProductCard, ProductVisual } from "@/components/CatalogUI";
-import { ComboKit, findProduct, formatINR, mergeProductSources, normalizeApiComboKits, normalizeApiProducts, productEnquiry, products, recommendedProducts, whatsappLink } from "@/lib/catalog";
+import { ComboKit, formatINR, normalizeApiComboKits, normalizeApiProducts, productEnquiry, recommendedProducts, whatsappLink } from "@/lib/catalog";
 import { useBusinessSettings, useCart } from "@/components/SiteShell";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -11,19 +11,30 @@ import { toast } from "sonner";
 export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCart> }) {
   const settings = useBusinessSettings();
   const [, params] = useRoute("/products/:id");
-  const { data: liveProduct } = trpc.catalog.get.useQuery({ slug: params?.id || "" }, { enabled: Boolean(params?.id) });
-  const { data: catalogRows } = trpc.catalog.list.useQuery();
-  const { data: comboRows } = trpc.catalog.comboKits.useQuery();
+  const { data: liveProduct, isLoading: productLoading, error: productError } = trpc.catalog.get.useQuery({ slug: params?.id || "" }, { enabled: Boolean(params?.id), retry: false, refetchInterval: 45_000 });
+  const { data: catalogRows } = trpc.catalog.list.useQuery(undefined, { refetchInterval: 45_000 });
+  const { data: comboRows } = trpc.catalog.comboKits.useQuery(undefined, { refetchInterval: 60_000 });
+  const trackEvent = trpc.analytics.track.useMutation();
   
-  const liveProductValue = normalizeApiProducts(liveProduct ? [liveProduct as unknown as Record<string, unknown>] : undefined)[0];
-  const liveProducts = normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined);
-  const sourceProducts = mergeProductSources(liveProducts, products);
-  const product = liveProductValue || findProduct(params?.id || "");
+  const liveProductValue = useMemo(
+    () => normalizeApiProducts(liveProduct ? [liveProduct as unknown as Record<string, unknown>] : undefined)[0],
+    [liveProduct]
+  );
+  const liveProducts = useMemo(
+    () => normalizeApiProducts(catalogRows as Array<Record<string, unknown>> | undefined),
+    [catalogRows]
+  );
+  const sourceProducts = liveProducts;
+  const product = liveProductValue;
+  const productPhotos = product ? (product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : []) : [];
   const kits = normalizeApiComboKits(comboRows as Array<Record<string, unknown>> | undefined);
   
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [activeSpec, setActiveSpec] = useState(0);
+  const [activePhoto, setActivePhoto] = useState(0);
+  useEffect(() => setActivePhoto(0), [product?.id]);
+  useEffect(() => { if (product?.id) trackEvent.mutate({ event: "product_view", productId: product.id }); }, [product?.id]);
 
   // Recommendations
   const related = useMemo(() => (product ? recommendedProducts(product, sourceProducts) : []), [product, sourceProducts]);
@@ -31,20 +42,31 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
 
   // Frequently Bought Together Bundle state
   const [selectedBundleSlugs, setSelectedBundleSlugs] = useState<string[]>([]);
+  const initializedBundleFor = useRef<string | null>(null);
 
-  // Update bundle selection when related products change
-  useMemo(() => {
-    if (related.length > 0) {
-      setSelectedBundleSlugs(related.slice(0, 2).map((p) => p.id));
-    }
-  }, [related]);
+  useEffect(() => {
+    if (!product || !related.length || initializedBundleFor.current === product.id) return;
+    setSelectedBundleSlugs(related.slice(0, 2).map((p) => p.id));
+    initializedBundleFor.current = product.id;
+  }, [product?.id, related]);
+
+  if (!product && productLoading) {
+    return (
+      <div className="container grid min-h-[60vh] place-items-center">
+        <div className="text-center">
+          <div className="mx-auto size-8 animate-spin rounded-full border-2 border-white/15 border-t-orange-400" />
+          <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-white/45">Loading component details</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
       <div className="container py-28 text-center">
-        <p className="eyebrow text-orange-300">404 / Component not found</p>
-        <h1 className="mt-4 font-display text-4xl text-white">Product not in catalog.</h1>
-        <p className="mt-3 text-sm text-white/45">The requested component may have moved or been unlisted.</p>
+        <p className="eyebrow text-orange-300">{productError ? "Catalog / unable to load" : "404 / component not found"}</p>
+        <h1 className="mt-4 font-display text-4xl text-white">{productError ? "We couldn’t load this component." : "Product not in catalog."}</h1>
+        <p className="mt-3 text-sm text-white/45">{productError ? "Please try again in a moment, or browse the catalog for available components." : "The requested component may have moved or been unlisted."}</p>
         <Link href="/products" className="mt-6 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.14em] text-orange-300 hover:text-white">
           Back to catalog <ArrowUpRight size={14} />
         </Link>
@@ -52,28 +74,26 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
     );
   }
 
-  const isOutOfStock = product.stockStatus === "Out of stock" || (product.stock !== undefined && product.stock <= 0 && product.stockStatus !== "In stock");
-  const isLowStock = !isOutOfStock && product.stock !== undefined && product.stock > 0 && product.stock <= (product.lowStockThreshold || 5);
+  const isOutOfStock = product.stockStatus === "Out of stock" || (product.stock !== undefined && product.stock <= 0);
+  const isLowStock = !isOutOfStock && (product.stockStatus === "Limited" || (product.stock !== undefined && product.stock > 0 && product.stock <= (product.lowStockThreshold ?? 5)));
+  const cartQuantity = cart.items.find((item) => item.id === product.id)?.quantity ?? 0;
 
   const addProductToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      cart.add(product);
-    }
+    if (!cart.add(product, quantity)) return;
     setAdded(true);
     toast.success(`Added ${quantity}× ${product.name} to cart`);
     window.setTimeout(() => setAdded(false), 2000);
   };
 
   const addKit = (kit: ComboKit) => {
+    let addedAll = true;
     kit.items.forEach((item) => {
       const kitProduct = sourceProducts.find((candidate) => candidate.id === item.productSlug);
       if (kitProduct) {
-        for (let index = 0; index < item.quantity; index += 1) {
-          cart.add(kitProduct);
-        }
+        if (!cart.add(kitProduct, item.quantity)) addedAll = false;
       }
     });
-    toast.success(`Added ${kit.name} bundle to cart!`);
+    if (addedAll) toast.success(`Added ${kit.name} bundle to cart!`);
   };
 
   const toggleBundleItem = (slug: string) => {
@@ -113,7 +133,23 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
           <div className="mt-8 grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
             {/* Visual Column */}
             <div className="relative">
-              <ProductVisual product={product} large />
+              <ProductVisual product={{ ...product, imageUrl: productPhotos[activePhoto] }} large />
+              {productPhotos.length > 1 && (
+                <div className="mt-3 grid grid-cols-4 gap-3" aria-label="Product photos">
+                  {productPhotos.map((photo, index) => (
+                    <button
+                      key={`${photo}-${index}`}
+                      type="button"
+                      onClick={() => setActivePhoto(index)}
+                      aria-label={`Show product photo ${index + 1}`}
+                      aria-pressed={activePhoto === index}
+                      className={`aspect-square overflow-hidden rounded-md border transition-colors ${activePhoto === index ? "border-orange-400 ring-1 ring-orange-400/50" : "border-white/15 hover:border-white/40"}`}
+                    >
+                      <img src={photo} alt={`${product.name} view ${index + 1}`} className="size-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="product-art-badge">
                 <span className="pulse-dot" /> SKU / {product.sku}
               </div>
@@ -135,11 +171,11 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
                     </span>
                   ) : isLowStock ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-amber-300">
-                      <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" /> Low stock: Only {product.stock} left
+                      <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" /> Limited availability
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-300">
-                      <span className="size-1.5 rounded-full bg-emerald-400" /> In stock ({product.stock ?? "Available"})
+                      <span className="size-1.5 rounded-full bg-emerald-400" /> In stock
                     </span>
                   )}
                 </div>
@@ -199,8 +235,8 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
                     <span className="font-mono text-sm font-semibold text-white">{quantity}</span>
                     <button
                       type="button"
-                      disabled={isOutOfStock}
-                      onClick={() => setQuantity((q) => q + 1)}
+                      disabled={isOutOfStock || (product.stock !== undefined && quantity >= product.stock)}
+                      onClick={() => setQuantity((q) => Math.min(product.stock ?? q + 1, q + 1))}
                       className="text-white/60 hover:text-orange-400 disabled:opacity-20"
                       aria-label="Increase quantity"
                     >
@@ -214,7 +250,9 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
                     disabled={isOutOfStock}
                     className="h-12 w-full rounded-md bg-[#ff6417] px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400 disabled:opacity-40"
                   >
-                    {added ? (
+                    {cartQuantity > 0 ? (
+                      <><Check size={16} /> In cart ({cartQuantity}) · Add another</>
+                    ) : added ? (
                       <>
                         <Check size={16} /> Added to cart
                       </>
@@ -228,8 +266,9 @@ export default function ProductDetail({ cart }: { cart: ReturnType<typeof useCar
 
                 {/* Direct WhatsApp Action */}
                 <div className="mt-3">
-                  <a
+                    <a
                     href={whatsappLink(directOrderMessage, settings.whatsappNumber)}
+                      onClick={() => trackEvent.mutate({ event: "whatsapp_click", productId: product.id, path: `/products/${product.id}` })}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.04] px-5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white hover:border-orange-400 hover:text-orange-300 transition-colors"

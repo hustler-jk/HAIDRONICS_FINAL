@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, Plus } from "lucide-react";
+import { ArrowUpRight, Check, Plus } from "lucide-react";
 import { Product, formatINR } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 
 export function ProductVisual({ product, large = false }: { product: Product; large?: boolean }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const showUploadedImage = Boolean(product.imageUrl) && !imageFailed;
+  const imageUrl = product.images?.[0] || product.imageUrl;
+  useEffect(() => setImageFailed(false), [imageUrl]);
+  const showUploadedImage = Boolean(imageUrl) && !imageFailed;
   return (
     <div className={`product-art ${large ? "product-art-large" : ""}`} data-variant={product.image} style={{ "--accent": product.accent } as React.CSSProperties}>
-      {showUploadedImage && <img src={product.imageUrl} alt={product.name} className="product-uploaded-image" onError={() => setImageFailed(true)} />}
+      {showUploadedImage && <img src={imageUrl} alt={product.name} className="product-uploaded-image" onError={() => setImageFailed(true)} />}
       {!showUploadedImage && <>
       <div className="art-grid" />
       <div className="art-glow" />
@@ -25,14 +27,22 @@ export function ProductVisual({ product, large = false }: { product: Product; la
   );
 }
 
-export function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Product) => void }) {
+export function ProductCard({ product, onAdd, compact = false, cartQuantity = 0 }: { product: Product; onAdd: (product: Product) => boolean | void; compact?: boolean; cartQuantity?: number }) {
+  const [added, setAdded] = useState(false);
+  const unavailable = product.stockStatus === "Out of stock" || product.stock === 0;
+  const inCart = cartQuantity > 0 || added;
+  const add = () => {
+    if (onAdd(product) === false) return;
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1800);
+  };
   return (
-    <article className="product-card group">
+    <article className={`product-card group ${compact ? "catalog-product-card" : ""}`}>
       <Link href={`/products/${product.id}`} className="block"><ProductVisual product={product} /></Link>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3"><div><p className="eyebrow text-orange-300/80">{product.category}</p><Link href={`/products/${product.id}`} className="mt-2 block font-display text-lg leading-tight text-white transition-colors group-hover:text-orange-300">{product.name}</Link></div><p className="font-mono text-sm font-semibold text-orange-300">{formatINR(product.price)}</p></div>
-        <p className="mt-3 min-h-10 text-sm leading-5 text-white/46">{product.shortDescription}</p>
-        <div className="mt-5 flex items-center justify-between gap-3"><div><Link href={`/products/${product.id}`} className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white/75 hover:text-orange-300">View product <ArrowUpRight size={13} /></Link><p className={`mt-2 font-mono text-[9px] uppercase tracking-[0.12em] ${product.stockStatus === "Out of stock" ? "text-red-300" : product.stockStatus === "Limited" ? "text-amber-300" : "text-emerald-300"}`}>{product.stockStatus || "In stock"}</p></div><Button disabled={product.stockStatus === "Out of stock"} size="sm" variant="outline" className="h-8 border-white/15 bg-transparent px-2.5 font-mono text-[9px] uppercase tracking-[0.1em] text-white/65 hover:border-orange-400 hover:bg-orange-500/10 hover:text-orange-300 disabled:opacity-40" onClick={() => onAdd(product)}><Plus size={13} /> Cart</Button></div>
+      <div className="catalog-product-info p-5">
+        <div className="catalog-product-heading flex items-start justify-between gap-3"><div className="min-w-0"><p className="catalog-product-category eyebrow text-orange-300/80">{product.category}</p><Link href={`/products/${product.id}`} className="catalog-product-name mt-2 block font-display text-lg leading-tight text-white transition-colors group-hover:text-orange-300">{product.name}</Link></div><p className="catalog-product-price shrink-0 font-mono text-sm font-semibold text-orange-300">{formatINR(product.price)}</p></div>
+        <p className="catalog-product-description mt-3 min-h-10 text-sm leading-5 text-white/46">{product.shortDescription}</p>
+        <div className="catalog-product-actions mt-5 flex items-center justify-between gap-3"><div><Link href={`/products/${product.id}`} className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white/75 hover:text-orange-300">View product <ArrowUpRight size={13} /></Link><p className={`mt-2 font-mono text-[9px] uppercase tracking-[0.12em] ${unavailable ? "text-red-300" : product.stockStatus === "Limited" ? "text-amber-300" : "text-emerald-300"}`}>{unavailable ? "Out of stock" : product.stockStatus || "In stock"}</p></div><Button disabled={unavailable} size="sm" variant="outline" aria-label={inCart ? `${product.name}, ${cartQuantity || 1} in cart. Add one more.` : `Add ${product.name} to cart`} className={`h-8 border-white/15 bg-transparent px-2.5 font-mono text-[9px] uppercase tracking-[0.1em] hover:border-orange-400 hover:bg-orange-500/10 hover:text-orange-300 disabled:opacity-40 ${inCart ? "border-emerald-400/50 text-emerald-300" : "text-white/65"}`} onClick={add}>{inCart ? <><Check size={13} /> In cart{cartQuantity > 1 ? ` · ${cartQuantity}` : ""}</> : <><Plus size={13} /> Cart</>}</Button></div>
       </div>
     </article>
   );

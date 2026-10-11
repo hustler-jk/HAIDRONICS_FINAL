@@ -112,3 +112,12 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Local data and debug files
+.manus-logs/
+Microsoft/
+billing software
+problems
+coursel_images/*transactions*.csv
+coursel_images/actionplan
+client/public/uploads/

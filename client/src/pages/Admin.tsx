@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   Loader2,
   LogIn,
+  Megaphone,
   MessageCircle,
   Package,
   Printer,
@@ -25,14 +26,16 @@ import {
   ScrollText,
   Search,
   Settings2,
+  Tag,
   Trash2,
   TrendingUp,
   UploadCloud,
   Users,
+  UserRound,
   X,
 } from "lucide-react";
-import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { defaultProductCategories } from "@shared/productCategories";
 import {
   ComboKit,
   formatINR,
@@ -40,18 +43,21 @@ import {
   normalizeApiComboKits,
   normalizeApiProducts,
   Product,
-  products as seedProducts,
   whatsappLink,
 } from "@/lib/catalog";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { Link, useLocation } from "wouter";
 
 const nav = [
   ["dashboard", "Dashboard", LayoutDashboard],
   ["orders", "Orders", ClipboardList],
   ["inventory", "Inventory", Boxes],
   ["products", "Products", Package],
+  ["categories", "Categories", Tag],
   ["comboKits", "Combo Kits", Layers3],
+  ["comboRequests", "Kit Requests", MessageCircle],
+  ["updates", "Store Updates", Megaphone],
   ["customerStories", "Customer Proof", Images],
   ["transactions", "Transactions", ReceiptText],
   ["reports", "Reports & Export", FileBarChart],
@@ -92,6 +98,8 @@ type CustomerStoryAdmin = {
   imageUrl?: string | null;
 };
 
+type ProductPhotoContentType = "image/png" | "image/jpeg" | "image/webp";
+
 type ProductDraft = {
   id?: number;
   slug: string;
@@ -101,25 +109,40 @@ type ProductDraft = {
   shortDescription: string;
   description: string;
   category: string;
-  imageUrl?: string;
+  images: string[];
+  photos: { filename: string; contentType: ProductPhotoContentType; base64: string }[];
   stock: string;
   lowStockThreshold: string;
   stockStatus: "In stock" | "Limited" | "Out of stock";
   featured: boolean;
-  image?: { filename: string; contentType: string; base64: string } | null;
+  active: boolean;
+  hidden: boolean;
 };
+
+function isProductPhotoContentType(type: string): type is ProductPhotoContentType {
+  return type === "image/png" || type === "image/jpeg" || type === "image/webp";
+}
+
+function suggestSku(category: string, name: string) {
+  const categoryCode = category.replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "PRT";
+  const nameCode = name.replace(/[^a-z0-9]/gi, "").slice(0, 12).toUpperCase() || "NEW";
+  return `HD-${categoryCode}-${nameCode}`;
+}
 
 export default function Admin() {
   const { user, loading, isAuthenticated } = useAuth();
   if (loading) return <AdminLoading />;
   if (!isAuthenticated) return <AdminGate />;
-  if (user?.role !== "admin") return <AdminDenied userName={user?.name || "signed-in user"} />;
+  if (user?.role !== "admin") return <AdminDenied />;
   return <AdminWorkspace />;
 }
 
 function AdminWorkspace() {
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
   const [section, setSection] = useState("dashboard");
   const [search, setSearch] = useState("");
+  const [categoryName, setCategoryName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCombo, setShowAddCombo] = useState(false);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
@@ -137,7 +160,25 @@ function AdminWorkspace() {
     lowStockThreshold: "5",
     stockStatus: "In stock",
     featured: false,
-    image: null,
+    active: true,
+    hidden: false,
+    images: [],
+    photos: [],
+  });
+  const createCategoryMutation = trpc.admin.categories.create.useMutation({
+    onSuccess: async () => {
+      setCategoryName("");
+      toast.success("Product category added.");
+      await utils.admin.categories.list.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const deleteCategoryMutation = trpc.admin.categories.delete.useMutation({
+    onSuccess: async () => {
+      toast.success("Product category deleted.");
+      await utils.admin.categories.list.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
   });
 
   const [editingProduct, setEditingProduct] = useState<ProductDraft | null>(null);
@@ -156,8 +197,17 @@ function AdminWorkspace() {
     caption: "",
     image: null,
   });
+  const [newUpdate, setNewUpdate] = useState({
+    kind: "announcement" as "instagram" | "youtube" | "announcement",
+    title: "",
+    body: "",
+    url: "",
+    imageUrl: "",
+  });
 
   const [restockDraft, setRestockDraft] = useState<Record<string, string>>({});
+  const [inventoryValues, setInventoryValues] = useState<Record<string, { stock: string; threshold: string }>>({});
+  const [uploadingProductPhotos, setUploadingProductPhotos] = useState(false);
   const [settings, setSettings] = useState<SettingsForm>({
     businessName: "HAIDRONICS",
     whatsappNumber: "918248453861",
@@ -172,11 +222,14 @@ function AdminWorkspace() {
   });
 
   const utils = trpc.useUtils();
-  const productsQuery = trpc.admin.products.list.useQuery(undefined, { retry: false });
+  const productsQuery = trpc.admin.products.list.useQuery(undefined, { retry: false, refetchInterval: 30_000 });
+  const categoriesQuery = trpc.admin.categories.list.useQuery(undefined, { enabled: section === "categories" || section === "products" || showAdd || !!editingProduct, retry: false });
   const requestsQuery = trpc.admin.requests.list.useQuery(undefined, { enabled: section === "requests", retry: false });
   const analyticsQuery = trpc.admin.analytics.list.useQuery(undefined, { enabled: section === "analytics", retry: false });
   const comboQuery = trpc.admin.comboKits.list.useQuery(undefined, { enabled: section === "comboKits", retry: false });
+  const comboRequestsQuery = trpc.admin.comboRequests.list.useQuery(undefined, { enabled: section === "comboRequests", retry: false });
   const storiesQuery = trpc.admin.customerStories.list.useQuery(undefined, { enabled: section === "customerStories", retry: false });
+  const updatesQuery = trpc.admin.updates.list.useQuery(undefined, { enabled: section === "updates", retry: false });
   const ordersQuery = trpc.admin.orders.list.useQuery(undefined, { enabled: section === "orders" || section === "reports", retry: false });
   const inventoryQuery = trpc.admin.inventory.movements.useQuery(undefined, { enabled: section === "inventory" || section === "reports", retry: false });
   const transactionsQuery = trpc.admin.transactions.list.useQuery(undefined, { enabled: section === "transactions" || section === "reports", retry: false });
@@ -187,39 +240,72 @@ function AdminWorkspace() {
     onSuccess: async () => {
       setShowAdd(false);
       toast.success("Product created in catalog!");
-      await utils.admin.products.list.invalidate();
+      await Promise.all([
+        utils.admin.products.list.invalidate(),
+        utils.admin.categories.list.invalidate(),
+        utils.admin.inventory.movements.invalidate(),
+        utils.admin.reports.metrics.invalidate(),
+        utils.admin.audit.list.invalidate(),
+        utils.catalog.list.invalidate(),
+        utils.catalog.search.invalidate(),
+        utils.catalog.get.invalidate(),
+      ]);
     },
+    onError: (error) => toast.error(error.message),
   });
 
   const updateMutation = trpc.admin.products.update.useMutation({
     onSuccess: async () => {
       setEditingProduct(null);
       toast.success("Product updated!");
-      await utils.admin.products.list.invalidate();
+      await Promise.all([
+        utils.admin.products.list.invalidate(),
+        utils.admin.categories.list.invalidate(),
+        utils.admin.inventory.movements.invalidate(),
+        utils.admin.reports.metrics.invalidate(),
+        utils.admin.audit.list.invalidate(),
+        utils.catalog.list.invalidate(),
+        utils.catalog.search.invalidate(),
+        utils.catalog.get.invalidate(),
+      ]);
     },
+    onError: (error) => toast.error(error.message),
   });
 
   const uploadMutation = trpc.admin.products.uploadImage.useMutation();
   const hideMutation = trpc.admin.products.hide.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Product hidden from storefront.");
-      utils.admin.products.list.invalidate();
+      await Promise.all([
+        utils.admin.products.list.invalidate(),
+        utils.catalog.list.invalidate(),
+        utils.catalog.search.invalidate(),
+        utils.catalog.get.invalidate(),
+      ]);
     },
+    onError: (error) => toast.error(error.message),
   });
 
   const createComboMutation = trpc.admin.comboKits.create.useMutation({
     onSuccess: async () => {
       setShowAddCombo(false);
       toast.success("Combo kit published!");
-      await utils.admin.comboKits.list.invalidate();
+      await Promise.all([utils.admin.comboKits.list.invalidate(), utils.catalog.comboKits.invalidate()]);
     },
   });
 
   const hideComboMutation = trpc.admin.comboKits.hide.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Combo kit removed.");
-      utils.admin.comboKits.list.invalidate();
+      await Promise.all([utils.admin.comboKits.list.invalidate(), utils.catalog.comboKits.invalidate()]);
     },
+  });
+  const approveComboRequestMutation = trpc.admin.comboRequests.approve.useMutation({
+    onSuccess: async (order) => {
+      toast.success(`Order ${order.orderNumber} created. Move it to payment pending when ready.`);
+      await Promise.all([utils.admin.comboRequests.list.invalidate(), utils.admin.orders.list.invalidate(), utils.admin.audit.list.invalidate()]);
+    },
+    onError: (error) => toast.error(error.message),
   });
 
   const createStoryMutation = trpc.admin.customerStories.create.useMutation({
@@ -227,17 +313,37 @@ function AdminWorkspace() {
       setShowAddCombo(false);
       setNewStory({ title: "", customerName: "", projectType: "", caption: "", image: null });
       toast.success("Customer story added!");
-      await utils.admin.customerStories.invalidate();
+      await Promise.all([utils.admin.customerStories.invalidate(), utils.catalog.customerStories.invalidate()]);
     },
   });
 
   const hideStoryMutation = trpc.admin.customerStories.hide.useMutation({
-    onSuccess: () => utils.admin.customerStories.invalidate(),
+    onSuccess: async () => Promise.all([utils.admin.customerStories.invalidate(), utils.catalog.customerStories.invalidate()]),
+  });
+  const createUpdateMutation = trpc.admin.updates.create.useMutation({
+    onSuccess: async () => {
+      setNewUpdate({ kind: "announcement", title: "", body: "", url: "", imageUrl: "" });
+      toast.success("Store update published.");
+      await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const hideUpdateMutation = trpc.admin.updates.hide.useMutation({
+    onSuccess: async () => {
+      toast.success("Store update hidden.");
+      await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
   });
 
   const verifyPaymentMutation = trpc.admin.orders.verifyPayment.useMutation({
     onSuccess: async (res) => {
-      toast.success(`Payment verified for order ${res.orderNumber}! Stock deducted.`);
+      toast.success(`Payment verified for order ${res.orderNumber}; invoice ${res.invoiceId} created and stock deducted.`);
+      if (res.invoiceEmail.sent) {
+        toast.success(`Invoice emailed to ${res.invoiceEmail.recipient}.`);
+      } else {
+        toast.error(`Payment is verified, but invoice email failed: ${res.invoiceEmail.error}`);
+      }
       await Promise.all([
         utils.admin.orders.list.invalidate(),
         utils.admin.reports.metrics.invalidate(),
@@ -247,6 +353,15 @@ function AdminWorkspace() {
       ]);
     },
     onError: (err) => toast.error(`Verification error: ${err.message}`),
+  });
+
+  const sendInvoiceEmailMutation = trpc.admin.orders.sendInvoiceEmail.useMutation({
+    onSuccess: async (res) => {
+      if (res.sent) toast.success(`Invoice emailed to ${res.recipient}.`);
+      else toast.error(`Invoice email failed: ${res.error}`);
+      await Promise.all([utils.admin.orders.list.invalidate(), utils.admin.audit.list.invalidate()]);
+    },
+    onError: (error) => toast.error(`Invoice email error: ${error.message}`),
   });
 
   const rejectPaymentMutation = trpc.admin.orders.rejectPayment.useMutation({
@@ -292,8 +407,17 @@ function AdminWorkspace() {
         utils.admin.inventory.movements.invalidate(),
         utils.admin.reports.metrics.invalidate(),
         utils.admin.audit.list.invalidate(),
+        utils.catalog.list.invalidate(),
+        utils.catalog.search.invalidate(),
       ]);
     },
+  });
+  const saveInventoryMutation = trpc.admin.products.update.useMutation({
+    onSuccess: async () => {
+      toast.success("Inventory settings saved.");
+      await Promise.all([utils.admin.products.list.invalidate(), utils.admin.inventory.movements.invalidate(), utils.admin.audit.list.invalidate(), utils.catalog.list.invalidate(), utils.catalog.search.invalidate(), utils.admin.reports.metrics.invalidate()]);
+    },
+    onError: (error) => toast.error(error.message),
   });
 
   const settingsQuery = trpc.catalog.settings.useQuery();
@@ -317,7 +441,10 @@ function AdminWorkspace() {
   }, [settingsQuery.data]);
 
   const liveProducts = normalizeApiProducts(productsQuery.data as Array<Record<string, unknown>> | undefined);
-  const catalogProducts = (liveProducts.length ? liveProducts : seedProducts).filter((product) => !hiddenIds.includes(product.id));
+  const catalogProducts = liveProducts.filter((product) => !hiddenIds.includes(product.id));
+  const productCategoryNames = categoriesQuery.data
+    ? categoriesQuery.data.map((category) => category.name)
+    : [...defaultProductCategories];
   const comboKits = normalizeApiComboKits(comboQuery.data as Array<Record<string, unknown>> | undefined);
 
   const filtered = useMemo(
@@ -334,63 +461,77 @@ function AdminWorkspace() {
       return;
     }
     const slug = newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    let imageUrl = newProduct.imageUrl;
-    // If local image base64 provided, use it directly or try upload
-    if (newProduct.image?.base64) {
-      try {
-        const res = await uploadMutation.mutateAsync(newProduct.image);
-        imageUrl = res.url;
-      } catch {
-        // Fallback to storing compressed base64 data URL
-        imageUrl = newProduct.image.base64;
-      }
+    try {
+      setUploadingProductPhotos(true);
+      const images = await uploadProductPhotos([], newProduct.photos);
+      createMutation.mutate({
+        slug,
+        name: newProduct.name,
+        sku: newProduct.sku || suggestSku(newProduct.category, newProduct.name),
+        price: Number(newProduct.price),
+        shortDescription: newProduct.shortDescription || "New catalog component.",
+        description: newProduct.description || undefined,
+        category: newProduct.category,
+        tags: "",
+        specs: "[]",
+        images,
+        imageUrl: images[0] ?? null,
+        stockStatus: newProduct.stockStatus,
+        stock: Number(newProduct.stock),
+        lowStockThreshold: Number(newProduct.lowStockThreshold),
+        featured: newProduct.featured ? 1 : 0,
+        active: newProduct.active ? 1 : 0,
+        hidden: newProduct.hidden ? 1 : 0,
+      });
+    } catch (error) {
+      toast.error(`Could not upload product photo: ${error instanceof Error ? error.message : "Unknown upload error"}`);
+    } finally {
+      setUploadingProductPhotos(false);
     }
-
-    createMutation.mutate({
-      slug,
-      name: newProduct.name,
-      sku: newProduct.sku || undefined,
-      price: Number(newProduct.price),
-      shortDescription: newProduct.shortDescription || "New catalog component.",
-      description: newProduct.description || undefined,
-      category: newProduct.category,
-      tags: "",
-      specs: "[]",
-      imageUrl,
-      stockStatus: newProduct.stockStatus,
-      stock: Number(newProduct.stock),
-      lowStockThreshold: Number(newProduct.lowStockThreshold),
-      featured: newProduct.featured ? 1 : 0,
-    });
   };
 
   const editProduct = async (draft: ProductDraft) => {
     if (!draft.id) return;
-    let imageUrl = draft.imageUrl;
-    if (draft.image?.base64) {
-      try {
-        const res = await uploadMutation.mutateAsync(draft.image);
-        imageUrl = res.url;
-      } catch {
-        imageUrl = draft.image.base64;
-      }
+    try {
+      setUploadingProductPhotos(true);
+      const images = await uploadProductPhotos(draft.images, draft.photos);
+      updateMutation.mutate({
+        id: draft.id,
+        slug: draft.slug,
+        name: draft.name,
+        sku: draft.sku || undefined,
+        price: Number(draft.price),
+        shortDescription: draft.shortDescription,
+        description: draft.description,
+        category: draft.category,
+        images,
+        imageUrl: images[0] ?? null,
+        stockStatus: draft.stockStatus,
+        stock: Number(draft.stock),
+        lowStockThreshold: Number(draft.lowStockThreshold),
+        featured: draft.featured ? 1 : 0,
+        active: draft.active ? 1 : 0,
+        hidden: draft.hidden ? 1 : 0,
+      });
+    } catch (error) {
+      toast.error(`Could not upload product photo: ${error instanceof Error ? error.message : "Unknown upload error"}`);
+    } finally {
+      setUploadingProductPhotos(false);
     }
+  };
 
-    updateMutation.mutate({
-      id: draft.id,
-      slug: draft.slug,
-      name: draft.name,
-      sku: draft.sku || undefined,
-      price: Number(draft.price),
-      shortDescription: draft.shortDescription,
-      description: draft.description,
-      category: draft.category,
-      imageUrl,
-      stockStatus: draft.stockStatus,
-      stock: Number(draft.stock),
-      lowStockThreshold: Number(draft.lowStockThreshold),
-      featured: draft.featured ? 1 : 0,
-    });
+  const uploadProductPhotos = async (
+    existing: string[],
+    pending: ProductDraft["photos"]
+  ) => {
+    const urls = [...existing];
+    for (const photo of pending) {
+      const result = await uploadMutation.mutateAsync({
+        ...photo,
+      });
+      urls.push(result.url);
+    }
+    return urls;
   };
 
   const hideProduct = (product: Product) => {
@@ -435,7 +576,7 @@ function AdminWorkspace() {
             <img src={logoIconImage} alt="HAIDRONICS" className="size-10 rounded-lg object-contain bg-[#111416] p-1" />
             <div>
               <p className="font-display text-base font-bold tracking-[0.16em] text-white">HAIDRONICS</p>
-              <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-orange-400 font-semibold">Admin Workspace</p>
+              <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-orange-400 font-semibold">Operations Workspace</p>
             </div>
           </div>
 
@@ -471,10 +612,28 @@ function AdminWorkspace() {
         <div className="min-w-0 flex-1">
           <header className="flex h-[74px] items-center justify-between border-b border-black/10 bg-white px-5 md:px-8">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-black/40">HAIDRONICS / Administration</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-black/40">HAIDRONICS / Workspace</p>
               <h1 className="mt-1 font-display text-xl font-bold">{nav.find(([id]) => id === section)?.[1]}</h1>
             </div>
             <div className="flex items-center gap-3">
+              <span className="hidden text-right sm:block">
+                <span className="block text-xs font-semibold">{user?.name || "Administrator"}</span>
+                <span className="block text-[10px] text-black/45">{user?.email}</span>
+              </span>
+              <Link
+                href="/account"
+                aria-label="My account"
+                className="inline-flex items-center gap-2 rounded-md border border-black/15 bg-black/5 px-2.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-black hover:text-white transition-colors md:px-3.5"
+              >
+                <UserRound size={14} /> <span className="hidden md:inline">My Account</span>
+              </Link>
+              <button
+                type="button"
+                onClick={async () => { await logout(); navigate("/account"); }}
+                className="rounded-md border border-black/15 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black/60 hover:border-red-300 hover:text-red-600 transition-colors"
+              >
+                Exit
+              </button>
               <span className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-700 sm:flex border border-emerald-200">
                 <span className="size-1.5 rounded-full bg-emerald-500" /> Admin Role Active
               </span>
@@ -482,7 +641,7 @@ function AdminWorkspace() {
                 href="/"
                 className="rounded-md border border-black/15 bg-black/5 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-black hover:text-white transition-colors"
               >
-                View Store
+                Store
               </a>
             </div>
           </header>
@@ -506,6 +665,7 @@ function AdminWorkspace() {
           </div>
 
           <main className="p-5 md:p-8">
+            {(productsQuery.error || ((section === "orders" || section === "reports") && ordersQuery.error) || ((section === "categories" || section === "products") && categoriesQuery.error)) && <div role="alert" className="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">Some admin data could not be loaded from the database. This usually means the deployed database is missing one or more migrations. Apply the checked-in migrations, then reload this page.</div>}
             {section === "dashboard" && (
               <Dashboard
                 setSection={setSection}
@@ -533,13 +693,15 @@ function AdminWorkspace() {
                 onTransition={(id, status) => transitionOrderMutation.mutate({ id, status })}
                 onOverrideAmount={(id, finalAmount, reason) => overrideAmountMutation.mutate({ id, finalAmount, reason })}
                 onGenerateInvoice={(id) => generateInvoiceMutation.mutate({ id })}
+                onSendInvoiceEmail={(id) => sendInvoiceEmailMutation.mutate({ id })}
                 onViewInvoice={(order) => setActiveInvoiceOrder(order)}
                 busy={
                   verifyPaymentMutation.isPending ||
                   rejectPaymentMutation.isPending ||
                   transitionOrderMutation.isPending ||
                   overrideAmountMutation.isPending ||
-                  generateInvoiceMutation.isPending
+                  generateInvoiceMutation.isPending ||
+                  sendInvoiceEmailMutation.isPending
                 }
               />
             )}
@@ -549,9 +711,12 @@ function AdminWorkspace() {
                 products={catalogProducts}
                 movements={(inventoryQuery.data || []) as any[]}
                 restockDraft={restockDraft}
+                inventoryValues={inventoryValues}
+                setInventoryValues={setInventoryValues}
                 setRestockDraft={setRestockDraft}
                 onRestock={restock}
-                busy={restockMutation.isPending}
+                onSaveInventory={(product, stock, threshold) => saveInventoryMutation.mutate({ id: product.dbId!, stock, lowStockThreshold: threshold, stockStatus: stock <= 0 ? "Out of stock" : "In stock" })}
+                busy={restockMutation.isPending || saveInventoryMutation.isPending}
               />
             )}
 
@@ -571,15 +736,40 @@ function AdminWorkspace() {
                     shortDescription: product.shortDescription,
                     description: product.description,
                     category: product.category,
-                    imageUrl: product.imageUrl,
+                    images: product.images?.length ? product.images : (product.imageUrl ? [product.imageUrl] : []),
+                    photos: [],
                     stock: String(product.stock || 0),
-                    lowStockThreshold: String(product.lowStockThreshold || 5),
+                    lowStockThreshold: String(product.lowStockThreshold ?? 5),
                     stockStatus: (product.stockStatus as ProductDraft["stockStatus"]) || "In stock",
                     featured: Boolean(product.featured),
-                    image: null,
+                    active: product.active !== false,
+                    hidden: product.hidden === true,
                   })
                 }
                 onDelete={hideProduct}
+              />
+            )}
+
+            {section === "categories" && (
+              <CategoriesAdmin
+                categories={productCategoryNames.map((name) => ({
+                  id: categoriesQuery.data?.find((category) => category.name === name)?.id,
+                  name,
+                  productCount: categoriesQuery.data?.find((category) => category.name === name)?.productCount ?? 0,
+                }))}
+                newCategory={categoryName}
+                setNewCategory={setCategoryName}
+                onAdd={() => {
+                  const name = categoryName.trim();
+                  if (!name) {
+                    toast.error("Enter a category name.");
+                    return;
+                  }
+                  createCategoryMutation.mutate({ name });
+                }}
+                onDelete={(id) => deleteCategoryMutation.mutate({ id })}
+                saving={createCategoryMutation.isPending}
+                deleting={deleteCategoryMutation.isPending}
               />
             )}
 
@@ -591,12 +781,46 @@ function AdminWorkspace() {
                 onDelete={(id) => hideComboMutation.mutate({ id })}
               />
             )}
+            {section === "comboRequests" && <ComboRequestsAdmin rows={(comboRequestsQuery.data || []) as any[]} onApprove={(id) => approveComboRequestMutation.mutate({ id })} busy={approveComboRequestMutation.isPending} />}
 
             {section === "customerStories" && (
               <CustomerStoriesAdmin
                 stories={(storiesQuery.data || []) as CustomerStoryAdmin[]}
                 onAdd={() => setShowAddCombo(true)}
                 onDelete={(id) => hideStoryMutation.mutate({ id })}
+              />
+            )}
+
+            {section === "updates" && (
+              <StoreUpdatesAdmin
+                updates={(updatesQuery.data || []) as Array<{
+                  id: number;
+                  kind: string;
+                  title: string;
+                  body: string | null;
+                  url: string | null;
+                  imageUrl: string | null;
+                  active: number;
+                  createdAt: Date;
+                }>}
+                draft={newUpdate}
+                setDraft={setNewUpdate}
+                onAdd={() => {
+                  if (!newUpdate.title.trim()) {
+                    toast.error("Add a title for this update.");
+                    return;
+                  }
+                  createUpdateMutation.mutate({
+                    kind: newUpdate.kind,
+                    title: newUpdate.title.trim(),
+                    body: newUpdate.body.trim() || undefined,
+                    url: newUpdate.url.trim() || undefined,
+                    imageUrl: newUpdate.imageUrl.trim() || undefined,
+                  });
+                }}
+                onHide={id => hideUpdateMutation.mutate({ id })}
+                onUploadImage={photo => uploadMutation.mutateAsync(photo)}
+                saving={createUpdateMutation.isPending || uploadMutation.isPending}
               />
             )}
 
@@ -637,7 +861,8 @@ function AdminWorkspace() {
           setProduct={setNewProduct}
           onClose={() => setShowAdd(false)}
           onSave={addProduct}
-          saving={createMutation.isPending || uploadMutation.isPending}
+          saving={createMutation.isPending || uploadMutation.isPending || uploadingProductPhotos}
+          categories={productCategoryNames}
           uploadError={uploadMutation.error?.message}
         />
       )}
@@ -651,7 +876,8 @@ function AdminWorkspace() {
           }
           onClose={() => setEditingProduct(null)}
           onSave={() => editProduct(editingProduct)}
-          saving={updateMutation.isPending || uploadMutation.isPending}
+          saving={updateMutation.isPending || uploadMutation.isPending || uploadingProductPhotos}
+          categories={productCategoryNames}
           editing
           uploadError={uploadMutation.error?.message}
         />
@@ -694,18 +920,17 @@ function AdminGate() {
     <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white">
       <div className="w-full max-w-md border border-orange-400/25 bg-[#111416] p-8 text-center rounded-xl shadow-2xl">
         <img src={logoIconImage} alt="HAIDRONICS" className="mx-auto size-16 rounded-lg object-contain bg-white/5 p-2" />
-        <p className="eyebrow mt-6 text-orange-300">Protected Workspace</p>
-        <h1 className="mt-3 font-display text-4xl">Admin Access</h1>
+        <p className="eyebrow mt-6 text-orange-300">Restricted area</p>
+        <h1 className="mt-3 font-display text-4xl">Sign in to continue</h1>
         <p className="mt-4 text-sm leading-6 text-white/50">
-          Sign in with your authorized HAIDRONICS account to manage catalog, orders, stock, and automation.
+          Sign in with your pre-authorized Google account. Creating a customer account never grants admin access.
         </p>
-        <button
-          type="button"
-          onClick={() => startLogin()}
+        <Link
+          href="/account?next=%2Fadmin"
           className="mt-7 inline-flex items-center gap-2 rounded-md bg-[#ff6417] px-6 py-3.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-orange-400"
         >
-          <LogIn size={15} /> Continue with Sign In
-        </button>
+          <LogIn size={15} /> Continue to sign in
+        </Link>
         <a href="/" className="mt-5 block font-mono text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-white">
           Return to Storefront
         </a>
@@ -714,18 +939,19 @@ function AdminGate() {
   );
 }
 
-function AdminDenied({ userName }: { userName: string }) {
+function AdminDenied() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b0e0f] p-5 text-white">
       <div className="w-full max-w-md border border-red-400/25 bg-[#111416] p-8 text-center rounded-xl">
-        <p className="eyebrow text-red-300">Access Denied</p>
-        <h1 className="mt-3 font-display text-4xl">Not an Admin</h1>
+        <p className="eyebrow text-red-300">Access unavailable</p>
+        <h1 className="mt-3 font-display text-4xl">This page isn’t available</h1>
         <p className="mt-4 text-sm leading-6 text-white/50">
-          Signed in as <strong>{userName}</strong>. This account does not have administrator privileges.
+          Your account does not have permission to view this page.
         </p>
-        <a href="/" className="mt-7 inline-flex rounded-md border border-white/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:border-orange-400">
-          Return to Storefront
-        </a>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link href="/account" className="inline-flex rounded-md border border-white/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:border-orange-400">Open customer account</Link>
+          <Link href="/" className="inline-flex rounded-md border border-white/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:border-orange-400">Return to Storefront</Link>
+        </div>
       </div>
     </div>
   );
@@ -797,14 +1023,14 @@ function Dashboard({
                 <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
               </span>
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-orange-400">
-                HAIDRONICS CORE CONTROL ROOM // SYSTEM STATUS: NOMINAL (ONLINE)
+                HAIDRONICS OPERATIONS // WORKSPACE STATUS: ONLINE
               </p>
             </div>
             <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-white md:text-4xl">
-              Operations & Automated Fulfillment
+              Good to see you. Here’s your store at a glance.
             </h2>
             <p className="mt-1 text-xs text-white/50">
-              Real-time monitoring of customer WhatsApp inquiries, order state transitions, stock level telemetry, and H-Invoice generation.
+              Review orders, keep inventory current, and follow up with customers from one place.
             </p>
           </div>
 
@@ -1233,6 +1459,7 @@ function OrdersAdmin({
   onTransition,
   onOverrideAmount,
   onGenerateInvoice,
+  onSendInvoiceEmail,
   onViewInvoice,
   busy,
 }: {
@@ -1242,6 +1469,7 @@ function OrdersAdmin({
   onTransition: (id: number, status: "PAYMENT_PENDING" | "ORDER_CONFIRMED" | "PACKED" | "SHIPPED" | "DELIVERED" | "CANCELLED") => void;
   onOverrideAmount: (id: number, finalAmount: number, reason?: string) => void;
   onGenerateInvoice: (id: number) => void;
+  onSendInvoiceEmail: (id: number) => void;
   onViewInvoice: (order: any) => void;
   busy: boolean;
 }) {
@@ -1295,6 +1523,7 @@ function OrdersAdmin({
               onTransition={onTransition}
               onOverrideAmount={onOverrideAmount}
               onGenerateInvoice={onGenerateInvoice}
+              onSendInvoiceEmail={onSendInvoiceEmail}
               onViewInvoice={onViewInvoice}
               busy={busy}
             />
@@ -1316,6 +1545,7 @@ function OrderCard({
   onTransition,
   onOverrideAmount,
   onGenerateInvoice,
+  onSendInvoiceEmail,
   onViewInvoice,
   busy,
 }: {
@@ -1325,6 +1555,7 @@ function OrderCard({
   onTransition: (id: number, status: any) => void;
   onOverrideAmount: (id: number, finalAmount: number, reason?: string) => void;
   onGenerateInvoice: (id: number) => void;
+  onSendInvoiceEmail: (id: number) => void;
   onViewInvoice: (order: any) => void;
   busy: boolean;
 }) {
@@ -1376,6 +1607,13 @@ function OrderCard({
           <p className="mt-1 text-xs text-black/60 font-mono">
             📞 {order.phone} · 📍 {order.address}
           </p>
+          {order.invoiceId && (
+            <p className={`mt-1 text-[10px] font-mono ${order.invoiceEmailStatus === "SENT" ? "text-emerald-700" : order.invoiceEmailStatus === "FAILED" ? "text-red-700" : "text-black/45"}`}>
+              Invoice email: {order.invoiceEmailStatus || "NOT_SENT"}
+              {order.invoiceEmailSentAt ? ` · ${new Date(order.invoiceEmailSentAt).toLocaleString()}` : ""}
+              {order.invoiceEmailError ? ` · ${order.invoiceEmailError}` : ""}
+            </p>
+          )}
         </div>
 
         <div className="text-left md:text-right">
@@ -1431,11 +1669,23 @@ function OrderCard({
           ) : (
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || order.paymentStatus !== "VERIFIED"}
+              title={order.paymentStatus !== "VERIFIED" ? "Verify payment before generating an invoice." : undefined}
               onClick={() => onGenerateInvoice(order.id)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-black/15 px-3 py-1.5 font-mono text-[10px] font-bold text-black hover:bg-orange-500 hover:border-orange-500"
+              className="inline-flex items-center gap-1.5 rounded-md border border-black/15 px-3 py-1.5 font-mono text-[10px] font-bold text-black hover:bg-orange-500 hover:border-orange-500 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:border-black/15"
             >
-              <FileText size={14} /> Generate Invoice
+              <FileText size={14} /> {order.paymentStatus === "VERIFIED" ? "Generate Invoice" : "Invoice after payment"}
+            </button>
+          )}
+          {order.paymentStatus === "VERIFIED" && order.invoiceId && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSendInvoiceEmail(order.id)}
+              title={order.invoiceEmailError || undefined}
+              className="inline-flex items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-3 py-1.5 font-mono text-[10px] font-bold text-orange-800 hover:bg-orange-100 disabled:opacity-50"
+            >
+              <RefreshCw size={13} /> {order.invoiceEmailStatus === "SENT" ? "Resend invoice email" : "Send invoice email"}
             </button>
           )}
 
@@ -1452,6 +1702,8 @@ function OrderCard({
             <div className="flex items-center gap-2 bg-[#f7f8f8] p-2 rounded border border-black/10">
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={overridePrice}
                 onChange={(e) => setOverridePrice(e.target.value)}
                 className="h-8 w-24 rounded border border-black/20 bg-white px-2 text-xs font-mono"
@@ -1562,15 +1814,21 @@ function InventoryAdmin({
   products,
   movements,
   restockDraft,
+  inventoryValues,
+  setInventoryValues,
   setRestockDraft,
   onRestock,
+  onSaveInventory,
   busy,
 }: {
   products: Product[];
   movements: any[];
   restockDraft: Record<string, string>;
+  inventoryValues: Record<string, { stock: string; threshold: string }>;
+  setInventoryValues: React.Dispatch<React.SetStateAction<Record<string, { stock: string; threshold: string }>>>;
   setRestockDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onRestock: (product: Product) => void;
+  onSaveInventory: (product: Product, stock: number, threshold: number) => void;
   busy: boolean;
 }) {
   return (
@@ -1602,15 +1860,9 @@ function InventoryAdmin({
                 <td className="px-5 py-4 font-medium">{product.name}</td>
                 <td className="px-5 py-4 font-mono text-xs text-black/50">{product.sku}</td>
                 <td className="px-5 py-4">
-                  <span
-                    className={`font-mono text-sm font-bold ${
-                      (product.stock || 0) <= (product.lowStockThreshold || 5) ? "text-red-600" : "text-emerald-700"
-                    }`}
-                  >
-                    {product.stock || 0}
-                  </span>
+                  <input type="number" min="0" value={inventoryValues[String(product.dbId)]?.stock ?? String(product.stock ?? 0)} onChange={(e) => setInventoryValues(cur => ({ ...cur, [String(product.dbId)]: { stock: e.target.value, threshold: cur[String(product.dbId)]?.threshold ?? String(product.lowStockThreshold ?? 5) } }))} className="h-9 w-20 rounded border border-black/15 bg-[#f7f8f8] px-2 text-xs font-mono" aria-label={`${product.name} stock`} />
                 </td>
-                <td className="px-5 py-4 font-mono text-xs text-black/40">{product.lowStockThreshold || 5}</td>
+                <td className="px-5 py-4"><input type="number" min="0" value={inventoryValues[String(product.dbId)]?.threshold ?? String(product.lowStockThreshold ?? 5)} onChange={(e) => setInventoryValues(cur => ({ ...cur, [String(product.dbId)]: { stock: cur[String(product.dbId)]?.stock ?? String(product.stock ?? 0), threshold: e.target.value } }))} className="h-9 w-20 rounded border border-black/15 bg-[#f7f8f8] px-2 text-xs font-mono" aria-label={`${product.name} low stock threshold`} /></td>
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-2">
                     <input
@@ -1631,6 +1883,7 @@ function InventoryAdmin({
                     >
                       + Restock
                     </button>
+                    <button type="button" disabled={busy || !product.dbId} onClick={() => { const value = inventoryValues[String(product.dbId)] || { stock: String(product.stock ?? 0), threshold: String(product.lowStockThreshold ?? 5) }; onSaveInventory(product, Number(value.stock), Number(value.threshold)); }} className="rounded-md border border-black/20 px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider disabled:opacity-50">Save</button>
                   </div>
                 </td>
               </tr>
@@ -1690,10 +1943,7 @@ function ReportsAdmin({
   const exportOrdersCSV = () => {
     const headers = "OrderNumber,CustomerName,Phone,Address,Status,PaymentStatus,CalculatedAmount,FinalAmount,Date\n";
     const rows = orders
-      .map(
-        (o) =>
-          `"${o.orderNumber}","${o.customerName}","${o.phone}","${o.address.replace(/"/g, '""')}","${o.status}","${o.paymentStatus}",${o.calculatedAmount},${o.finalAmount},"${new Date(o.createdAt).toISOString()}"`
-      )
+      .map((o) => [o.orderNumber, o.customerName, o.phone, o.address, o.status, o.paymentStatus, o.calculatedAmount, o.finalAmount, new Date(o.createdAt).toISOString()].map(csvCell).join(","))
       .join("\n");
     downloadFile(headers + rows, `haidronics_orders_${Date.now()}.csv`);
   };
@@ -1701,10 +1951,7 @@ function ReportsAdmin({
   const exportInventoryCSV = () => {
     const headers = "ProductName,SKU,Category,CurrentStock,LowStockThreshold,Price\n";
     const rows = products
-      .map(
-        (p) =>
-          `"${p.name}","${p.sku}","${p.category}",${p.stock || 0},${p.lowStockThreshold || 5},${p.price}`
-      )
+      .map((p) => [p.name, p.sku, p.category, p.stock ?? 0, p.lowStockThreshold ?? 5, p.price].map(csvCell).join(","))
       .join("\n");
     downloadFile(headers + rows, `haidronics_inventory_${Date.now()}.csv`);
   };
@@ -1712,16 +1959,19 @@ function ReportsAdmin({
   const exportTransactionsCSV = () => {
     const headers = "TransactionID,OrderNumber,Amount,Type,Status,Date\n";
     const rows = transactions
-      .map(
-        (t) =>
-          `${t.transaction.id},"${t.orderNumber}",${t.transaction.amount},"${t.transaction.type}","${t.transaction.paymentStatus}","${new Date(t.transaction.createdAt).toISOString()}"`
-      )
+      .map((t) => [t.transaction.id, t.orderNumber, t.transaction.amount, t.transaction.type, t.transaction.paymentStatus, new Date(t.transaction.createdAt).toISOString()].map(csvCell).join(","))
       .join("\n");
     downloadFile(headers + rows, `haidronics_transactions_${Date.now()}.csv`);
   };
 
+  const csvCell = (value: unknown) => {
+    const text = String(value ?? "");
+    const safeText = typeof value !== "number" && /^[\s]*[=+@-]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replace(/"/g, '""')}"`;
+  };
+
   const downloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -1729,6 +1979,7 @@ function ReportsAdmin({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
     toast.success(`Downloaded ${filename}`);
   };
 
@@ -1741,10 +1992,11 @@ function ReportsAdmin({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard label="Total Orders" value={String(metrics?.orders || 0)} />
         <MetricCard label="Pending Payments" value={String(metrics?.pendingPayments || 0)} accent="amber" />
         <MetricCard label="Low Stock Items" value={String(metrics?.lowStock || 0)} accent="red" />
+        <MetricCard label="Sales Today" value={formatINR(metrics?.todaySales || 0)} accent="green" />
         <MetricCard label="Verified Revenue" value={formatINR(metrics?.revenue || 0)} accent="green" />
       </div>
 
@@ -1782,6 +2034,77 @@ function ReportsAdmin({
         </div>
       </div>
     </div>
+  );
+}
+
+function CategoriesAdmin({
+  categories,
+  newCategory,
+  setNewCategory,
+  onAdd,
+  onDelete,
+  saving,
+  deleting,
+}: {
+  categories: Array<{ id?: number; name: string; productCount: number }>;
+  newCategory: string;
+  setNewCategory: (value: string) => void;
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+  saving: boolean;
+  deleting: boolean;
+}) {
+  return (
+    <section>
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Catalog organization</p>
+        <h2 className="mt-1 font-display text-3xl font-bold">Product Categories</h2>
+        <p className="mt-2 max-w-2xl text-sm text-black/55">Add categories for your catalog. A category can only be deleted after its products have been moved or removed.</p>
+      </div>
+
+      <form
+        className="mt-6 flex max-w-xl gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAdd();
+        }}
+      >
+        <input
+          value={newCategory}
+          onChange={(event) => setNewCategory(event.target.value)}
+          maxLength={80}
+          placeholder="e.g. Wires & Cables"
+          aria-label="New category name"
+          className="h-11 min-w-0 flex-1 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-orange-500"
+        />
+        <button type="submit" disabled={saving || !newCategory.trim()} className="inline-flex h-11 items-center gap-2 rounded-md bg-orange-500 px-4 font-mono text-[10px] font-bold uppercase tracking-wide text-black hover:bg-orange-400 disabled:opacity-50">
+          <CirclePlus size={15} /> Add
+        </button>
+      </form>
+
+      <div className="mt-6 max-w-3xl overflow-hidden rounded-lg border border-black/10 bg-white">
+        {categories.map((category) => (
+          <div key={category.id ?? category.name} className="flex items-center justify-between gap-4 border-b border-black/5 px-4 py-3 last:border-b-0">
+            <div>
+              <p className="text-sm font-semibold">{category.name}</p>
+              <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wide text-black/40">
+                {category.productCount} product{category.productCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={!category.id || category.productCount > 0 || deleting}
+              onClick={() => category.id && onDelete(category.id)}
+              title={category.productCount > 0 ? "Move products out of this category before deleting it." : "Delete category"}
+              className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 font-mono text-[9px] uppercase tracking-wide text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-black/25"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        ))}
+        {!categories.length && <p className="p-5 text-sm text-black/50">No categories yet. Add one above to organize products.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -1942,6 +2265,10 @@ function SimpleLedger({
   );
 }
 
+function ComboRequestsAdmin({ rows, onApprove, busy }: { rows: Array<{ request: any; kit: string | null; kitSlug: string | null }>; onApprove: (id: number) => void; busy: boolean }) {
+  return <section><p className="font-mono text-[10px] uppercase tracking-[.15em] text-orange-600 font-semibold">Combo kits / availability queue</p><h2 className="mt-1 font-display text-3xl font-bold">Customer kit requests</h2><p className="mt-2 text-sm text-black/55">Approve a request to create a standard order. Then use Orders to mark it payment pending and continue through payment verification, stock deduction, and invoice processing.</p><div className="mt-6 grid gap-3">{rows.length ? rows.map(({ request, kit }) => <article key={request.id} className="rounded-lg border border-black/10 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-[9px] uppercase tracking-wider text-orange-600">Request #{request.id} / {request.status}</p><h3 className="mt-1 font-display text-xl font-bold">{kit || "Combo kit"}</h3><p className="mt-2 text-sm">{request.customerName} · {request.phone}</p><p className="mt-1 max-w-xl text-xs leading-5 text-black/55">{request.address}</p>{request.approvedOrderId && <p className="mt-2 font-mono text-xs text-emerald-700">Order ID: {request.approvedOrderId}</p>}</div>{request.status === "REQUESTED" && <button type="button" disabled={busy} onClick={() => onApprove(request.id)} className="rounded-md bg-orange-500 px-4 py-3 font-mono text-[9px] font-bold uppercase tracking-wider text-black disabled:opacity-50">Approve & create order</button>}</div></article>) : <p className="rounded-lg border border-dashed border-black/20 p-8 text-center text-sm text-black/45">No combo kit requests yet.</p>}</div></section>;
+}
+
 function Requests({
   data,
 }: {
@@ -1986,6 +2313,173 @@ function Requests({
             No customer requests submitted yet.
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+type StoreUpdateAdminRow = {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  imageUrl: string | null;
+  active: number;
+  createdAt: Date;
+};
+
+function StoreUpdatesAdmin({
+  updates,
+  draft,
+  setDraft,
+  onAdd,
+  onHide,
+  onUploadImage,
+  saving,
+}: {
+  updates: StoreUpdateAdminRow[];
+  draft: {
+    kind: "instagram" | "youtube" | "announcement";
+    title: string;
+    body: string;
+    url: string;
+    imageUrl: string;
+  };
+  setDraft: React.Dispatch<React.SetStateAction<typeof draft>>;
+  onAdd: () => void;
+  onHide: (id: number) => void;
+  onUploadImage: (photo: { filename: string; contentType: ProductPhotoContentType; base64: string }) => Promise<{ url: string }>;
+  saving: boolean;
+}) {
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const uploadPostImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!isProductPhotoContentType(file.type)) {
+      toast.error("Choose a JPG, PNG, or WebP post image.");
+      return;
+    }
+    if (file.size > 5_000_000) {
+      toast.error("Post images must be smaller than 5 MB.");
+      return;
+    }
+    const contentType = file.type;
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setUploadingImage(false);
+      toast.error("Could not read the selected post image.");
+    };
+    reader.onload = async () => {
+      if (typeof reader.result !== "string") {
+        setUploadingImage(false);
+        toast.error("Could not read the selected post image.");
+        return;
+      }
+      try {
+        const result = await onUploadImage({
+          filename: file.name,
+          contentType,
+          base64: reader.result,
+        });
+        setDraft(current => ({ ...current, imageUrl: result.url }));
+        toast.success("Post artwork uploaded.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not upload post artwork.");
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div>
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-600">Storefront / live highlights</p>
+      <h2 className="mt-1 font-display text-3xl font-bold">Hero Banners & Social Updates</h2>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-black/55">
+        Every published update becomes a slide in the large revolving homepage banner. Add one slide at a time; the 24 most recent published slides rotate automatically.
+      </p>
+
+      <div className="mt-5 grid gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950 sm:grid-cols-3">
+        <p><b>1. Create a slide</b><br />Choose an announcement for a custom homepage banner, or Instagram / YouTube for a social post.</p>
+        <p><b>2. Add banner copy</b><br />Enter the title and short text customers will see over the image.</p>
+        <p><b>3. Add your image</b><br />Upload a wide JPG, PNG, or WebP banner. Aim for about 1920 × 900 and keep it compressed for fast mobile loading.</p>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-black/45">
+        Upload one image per slide, then publish more slides to build the carousel. The homepage pauses while a visitor hovers or focuses the controls. Social posts still link to the original post; they are not imported automatically.
+      </p>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm md:p-6">
+          <h3 className="font-display text-xl font-bold">Create a banner slide</h3>
+          <div className="mt-5 grid gap-4">
+            <label>
+              <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">Update type</span>
+              <select value={draft.kind} onChange={event => setDraft(current => ({ ...current, kind: event.target.value as typeof current.kind }))} className="h-11 w-full rounded-md border border-black/15 bg-white px-3 text-sm">
+                <option value="announcement">HAIDRONICS announcement</option>
+                <option value="instagram">Instagram post</option>
+                <option value="youtube">YouTube post / video</option>
+              </select>
+            </label>
+            <label>
+              <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">Title</span>
+              <input maxLength={160} value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="New ESP32 stock has arrived" className="h-11 w-full rounded-md border border-black/15 px-3 text-sm" />
+            </label>
+            <label>
+              <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">{draft.kind === "announcement" ? "Update details" : "Post caption / contents"}</span>
+              <textarea maxLength={1000} rows={4} value={draft.body} onChange={event => setDraft(current => ({ ...current, body: event.target.value }))} placeholder={draft.kind === "announcement" ? "Tell customers what is new..." : "Paste the caption or summarize what this post shows..."} className="w-full rounded-md border border-black/15 p-3 text-sm" />
+              <span className="mt-1 block text-right font-mono text-[9px] text-black/35">{draft.body.length}/1000</span>
+            </label>
+            {draft.kind !== "announcement" && (
+              <label>
+                  <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">Post URL</span>
+                  <input type="url" value={draft.url} onChange={event => setDraft(current => ({ ...current, url: event.target.value }))} placeholder={draft.kind === "instagram" ? "https://www.instagram.com/p/..." : "https://www.youtube.com/watch?v=..."} className="h-11 w-full rounded-md border border-black/15 px-3 text-sm" />
+              </label>
+            )}
+            <label>
+              <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">Banner image URL (optional if you upload below)</span>
+              <input type="url" value={draft.imageUrl} onChange={event => setDraft(current => ({ ...current, imageUrl: event.target.value }))} placeholder="https://..." className="h-11 w-full rounded-md border border-black/15 px-3 text-sm" />
+            </label>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-black/20 bg-black/[0.02] px-4 py-3 text-center font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-black/65 transition-colors hover:border-orange-500/50 hover:bg-orange-50">
+              {uploadingImage ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} className="text-orange-600" />}
+              {uploadingImage ? "Uploading artwork…" : "Upload banner image (JPG / PNG / WebP, max 5 MB)"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadPostImage} disabled={uploadingImage} className="sr-only" />
+            </label>
+            {draft.imageUrl && (
+              <div className="overflow-hidden rounded-lg border border-black/10 bg-[#111619]">
+                <img src={draft.imageUrl} alt="Banner preview" className="aspect-[16/9] max-h-56 w-full object-cover" />
+                <p className="px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-white/55">Homepage banner preview</p>
+              </div>
+            )}
+          </div>
+          <button type="button" disabled={saving || !draft.title.trim()} onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-md bg-orange-500 px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-orange-400 disabled:opacity-50">
+            {saving && <Loader2 size={13} className="animate-spin" />} Publish banner slide
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm md:p-6">
+          <h3 className="font-display text-xl font-bold">Published & hidden updates ({updates.length})</h3>
+          <div className="mt-4 grid gap-3">
+            {updates.length ? updates.map(update => (
+              <article key={update.id} className="flex items-start gap-3 rounded-lg border border-black/10 p-4">
+                {update.imageUrl ? <img src={update.imageUrl} alt="" className="size-14 shrink-0 rounded object-cover" /> : <span className="grid size-14 shrink-0 place-items-center rounded bg-orange-50 text-orange-600"><Megaphone size={20} /></span>}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-semibold">{update.title}</h4>
+                    <span className={`rounded px-2 py-0.5 font-mono text-[8px] uppercase ${update.active ? "bg-emerald-50 text-emerald-700" : "bg-black/5 text-black/45"}`}>{update.active ? "Published" : "Hidden"}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-black/50">{update.body || update.url || update.kind}</p>
+                  <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-black/35">{update.kind}</p>
+                </div>
+                {update.active === 1 && <button type="button" onClick={() => onHide(update.id)} aria-label={`Hide ${update.title}`} className="rounded p-2 text-black/40 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>}
+              </article>
+            )) : <p className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-black/45">No updates yet. Publish a post or announcement to start.</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2041,8 +2535,9 @@ function Settings({
               <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">{label}</span>
               <input
                 type={key === "email" ? "email" : key === "shippingFee" ? "number" : key.endsWith("Url") ? "url" : "text"}
+                {...(key === "shippingFee" ? { min: 0, step: "0.01" } : {})}
                 value={settings[key]}
-                onChange={(e) => setSettings((cur) => ({ ...cur, [key]: e.target.value }))}
+                onChange={(e) => setSettings((cur) => ({ ...cur, [key]: key === "shippingFee" ? Number(e.target.value) : e.target.value }))}
                 className="h-11 w-full rounded-md border border-black/15 bg-[#f7f8f8] px-3.5 text-sm text-black outline-none focus:border-orange-500 focus:bg-white"
               />
             </label>
@@ -2080,6 +2575,7 @@ function MetricCard({ label, value, accent = "orange" }: { label: string; value:
 
 function AddProductModal({
   product,
+  categories,
   setProduct,
   onClose,
   onSave,
@@ -2088,6 +2584,7 @@ function AddProductModal({
   uploadError,
 }: {
   product: ProductDraft;
+  categories: string[];
   setProduct: (value: React.SetStateAction<ProductDraft>) => void;
   onClose: () => void;
   onSave: () => void;
@@ -2096,23 +2593,47 @@ function AddProductModal({
   uploadError?: string;
 }) {
   const update = (patch: Partial<ProductDraft>) =>
-    setProduct((cur) => ({ ...(cur || product), ...patch } as ProductDraft));
+    setProduct((cur) => {
+      const next = { ...(cur || product), ...patch } as ProductDraft;
+      if (!editing && (patch.name !== undefined || patch.category !== undefined)) next.sku = suggestSku(next.category, next.name);
+      return next;
+    });
 
-  const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      update({
-        image: {
-          filename: file.name,
-          contentType: file.type || "image/jpeg",
-          base64: String(reader.result),
-        },
-        imageUrl: String(reader.result), // preview instantly
-      });
-    };
-    reader.readAsDataURL(file);
+  const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selectedFiles.length) return;
+    const remaining = 4 - product.images.length - product.photos.length;
+    if (selectedFiles.length > remaining) {
+      toast.error(`You can add ${remaining} more photo${remaining === 1 ? "" : "s"} (4 maximum).`);
+    }
+    const accepted = selectedFiles.slice(0, Math.max(0, remaining));
+    const validFiles = accepted.filter((file) => {
+      if (!isProductPhotoContentType(file.type)) {
+        toast.error(`${file.name}: use a JPG, PNG, or WebP image.`);
+        return false;
+      }
+      if (file.size > 5_000_000) {
+        toast.error(`${file.name}: photos must be smaller than 5 MB.`);
+        return false;
+      }
+      return true;
+    });
+    Promise.all(validFiles.map((file) => new Promise<ProductDraft["photos"][number]>((resolve, reject) => {
+      if (!isProductPhotoContentType(file.type)) {
+        reject(new Error(`${file.name}: use a JPG, PNG, or WebP image.`));
+        return;
+      }
+      const contentType = file.type;
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string"
+        ? resolve({ filename: file.name, contentType, base64: reader.result })
+        : reject(new Error(`Could not read ${file.name}.`));
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+      reader.readAsDataURL(file);
+    }))).then((photos) => update({ photos: [...product.photos, ...photos] })).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Could not read selected photos.");
+    });
   };
 
   return (
@@ -2140,9 +2661,10 @@ function AddProductModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">SKU</span>
+              <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">{editing ? "SKU" : "Auto-generated SKU"}</span>
               <input
                 value={product.sku}
+                readOnly={!editing}
                 onChange={(e) => update({ sku: e.target.value })}
                 className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
               />
@@ -2151,11 +2673,18 @@ function AddProductModal({
               <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Price (INR) *</span>
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={product.price}
                 onChange={(e) => update({ price: e.target.value })}
                 className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"
               />
             </label>
+          </div>
+
+          <div className="grid gap-3 rounded-md border border-black/10 bg-black/[.02] p-4 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={product.active} onChange={e => update({ active: e.target.checked })} className="accent-orange-500" /> Published and available in storefront</label>
+            {editing && <label className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={!product.hidden} onChange={e => update({ hidden: !e.target.checked })} className="accent-orange-500" /> Visible in catalog</label>}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -2166,10 +2695,7 @@ function AddProductModal({
                 onChange={(e) => update({ category: e.target.value })}
                 className="h-11 w-full rounded-md border border-black/15 px-3 text-sm outline-none focus:border-orange-500 bg-white"
               >
-                <option>Development boards</option>
-                <option>Sensors</option>
-                <option>Displays</option>
-                <option>Modules</option>
+                {categories.map((category) => <option key={category}>{category}</option>)}
               </select>
             </label>
             <label className="block">
@@ -2226,23 +2752,39 @@ function AddProductModal({
             />
           </label>
 
-          {/* Photo Upload Option */}
+          {/* Product photo gallery */}
           <div className="rounded-lg border border-dashed border-black/20 bg-[#f7f8f8] p-4">
             <span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/60 font-bold">
-              Product Photo Upload
+              Product Photos · {product.images.length + product.photos.length}/4
             </span>
             <input
               type="file"
-              accept="image/*"
-              onChange={handleFile}
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={handleFiles}
+              disabled={product.images.length + product.photos.length >= 4}
               className="block w-full text-xs text-black/60 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-3 file:py-1.5 file:font-mono file:text-[10px] file:font-bold file:text-white hover:file:bg-orange-600"
             />
-            {product.imageUrl && (
-              <div className="mt-3 flex items-center gap-3">
-                <img src={product.imageUrl} alt="Preview" className="size-16 rounded-md object-cover border border-black/15" />
-                <span className="font-mono text-[10px] text-emerald-700 font-semibold">✓ Photo selected</span>
+            <p className="mt-2 font-mono text-[9px] text-black/45">Add up to four JPG, PNG, or WebP images (5 MB each). The first photo is the catalog cover.</p>
+            {(product.images.length > 0 || product.photos.length > 0) && (
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {product.images.map((url, index) => (
+                  <div key={`saved-${url}-${index}`} className="relative aspect-square overflow-hidden rounded-md border border-black/15">
+                    <img src={url} alt={`Product photo ${index + 1}`} className="size-full object-cover" />
+                    <button type="button" onClick={() => update({ images: product.images.filter((_, i) => i !== index) })} aria-label={`Remove photo ${index + 1}`} className="absolute right-1 top-1 rounded-full bg-black/75 p-1 text-white"><X size={12} /></button>
+                    {index === 0 && <span className="absolute bottom-0 inset-x-0 bg-black/70 py-1 text-center font-mono text-[8px] uppercase text-white">Cover</span>}
+                  </div>
+                ))}
+                {product.photos.map((photo, index) => (
+                  <div key={`new-${photo.filename}-${index}`} className="relative aspect-square overflow-hidden rounded-md border border-orange-500/40">
+                    <img src={photo.base64} alt={`New product photo ${product.images.length + index + 1}`} className="size-full object-cover" />
+                    <button type="button" onClick={() => update({ photos: product.photos.filter((_, i) => i !== index) })} aria-label={`Remove new photo ${index + 1}`} className="absolute right-1 top-1 rounded-full bg-black/75 p-1 text-white"><X size={12} /></button>
+                    {product.images.length + index === 0 && <span className="absolute bottom-0 inset-x-0 bg-black/70 py-1 text-center font-mono text-[8px] uppercase text-white">Cover</span>}
+                  </div>
+                ))}
               </div>
             )}
+            {uploadError && <p role="alert" className="mt-2 text-xs text-red-700">{uploadError}</p>}
           </div>
         </div>
 
@@ -2318,6 +2860,8 @@ function AddComboModal({
               <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.13em] text-black/50 font-semibold">Bundle Price (INR) *</span>
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={combo.price}
                 onChange={(e) => setCombo({ ...combo, price: e.target.value })}
                 className="h-11 w-full rounded-md border border-black/15 px-3 text-sm font-mono outline-none focus:border-orange-500"

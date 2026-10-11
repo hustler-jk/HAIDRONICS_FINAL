@@ -1,5 +1,8 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import { COOKIE_NAME, REFRESH_COOKIE_NAME } from "@shared/const";
+import { parse as parseCookieHeader } from "cookie";
 import type { User } from "../../drizzle/schema";
+import { clearSessionCookies, refreshSessionCookies } from "../auth/session";
 import { sdk } from "./sdk";
 
 export type TrpcContext = {
@@ -15,9 +18,27 @@ export async function createContext(
 
   try {
     user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
+  } catch {
     // Authentication is optional for public procedures.
     user = null;
+  }
+
+  if (!user) {
+    try {
+      user = await refreshSessionCookies(opts.req, opts.res);
+    } catch (error) {
+      console.error("[Auth] Failed to refresh session", error);
+    }
+  }
+  if (!user) {
+    const cookies = parseCookieHeader(opts.req.headers.cookie ?? "");
+    if (cookies[COOKIE_NAME] || cookies[REFRESH_COOKIE_NAME]) {
+      try {
+        await clearSessionCookies(opts.req, opts.res);
+      } catch (error) {
+        console.error("[Auth] Failed to clear invalid session cookies", error);
+      }
+    }
   }
 
   return {

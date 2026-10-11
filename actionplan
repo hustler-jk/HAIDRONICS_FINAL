@@ -1,0 +1,23 @@
+### needed to be done
+
+To put HAIDRONICS live, you need to deploy the latest project and configure its database, email, image storage, and Google sign-in for the production website. Local .env settings do not automatically carry over to hosting.
+Do these steps
+1. Choose a Node.js host that supports a custom build and start command, HTTPS, and server-side environment secrets. Use:
+   Build: npm run build
+   Start: npm start
+   Keep NODE_ENV=production and all secrets on the server. Never use VITE_ names for private keys.
+2. Connect the production database. Set DATABASE_URL to the Supabase Postgres connection string. This app expects SSL and supports the Supabase session pooler.
+   Before applying migrations, back up the database and check which ones are already applied. The project’s db:push command runs Drizzle migrations, but migration 0006 imports catalog data and can update matching product prices. Don’t run pending migrations blindly against your live catalog.
+3. Configure account and Google sign-in. Add these server secrets:
+   JWT_SECRET
+   GOOGLE_CLIENT_ID
+   GOOGLE_CLIENT_SECRET
+   GOOGLE_REDIRECT_URI
+   Set GOOGLE_REDIRECT_URI to https://your-domain/api/oauth/google/callback, and register that exact callback URL in Google Cloud Console. To grant your first admin account, sign in with its Google account, then run the documented admin:grant command from a trusted machine connected to the production database. See [admin access instructions](D:/haidronics_new/haidronics/docs/admin-access.md).
+4. Configure email verification and invoices. Set RESEND_API_KEY, INVOICE_FROM_EMAIL, and PUBLIC_APP_URL. Verify the sending domain in Resend and use an address on that domain. Without this setup, customers can’t complete email verification and invoice emails can’t be confirmed.
+5. Configure durable image storage. Create a public Supabase Storage bucket named haidronics-media; set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_STORAGE_BUCKET on the server. Keep the service role key private. Alternatively, configure the Forge URL and key. Local file uploads are not suitable for production hosts where files may disappear after a restart.
+6. Attach your domain and deploy. Configure your domain’s DNS with the host, enable HTTPS, add all production secrets in the host’s settings, then deploy. If you change environment secrets later, restart or redeploy the app.
+7. Test the live flows: create and verify a customer account, sign in, add ESP32 to cart, submit an order and open WhatsApp, then check the request in Admin. Test stock/threshold edits, image uploads, CSV reports, order approval, payment verification, invoice generation/email, and the site on a phone.
+Important payment detail
+The current order flow records the request and hands off to WhatsApp. Payment verification and order progression are handled by an admin; there is no automatic card or UPI payment gateway in this flow.
+I found the local environment has no Resend or image-storage credentials configured, and this workspace could not connect to the database to verify its migration status. After you’ve chosen a host, tell me its name—no secrets—and I can give you the exact settings screens and commands for that provider.
