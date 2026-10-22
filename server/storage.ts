@@ -3,7 +3,7 @@
 // Downloads return /manus-storage/{key} paths served via 307 redirect.
 
 import { ENV } from "./_core/env";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 
 function getForgeConfig() {
@@ -123,4 +123,44 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
 
   const { url } = (await resp.json()) as { url: string };
   return url;
+}
+
+export async function storageDeletePublicImage(imageUrl: string): Promise<"deleted" | "external" | "unsupported"> {
+  if (ENV.supabaseUrl && ENV.supabaseServiceRoleKey) {
+    const supabaseBase = new URL(ENV.supabaseUrl);
+    const url = new URL(imageUrl, supabaseBase);
+    const bucket = ENV.supabaseStorageBucket || "haidronics-media";
+    const publicPrefix = `/storage/v1/object/public/${encodeURIComponent(bucket)}/`;
+    if (url.origin === supabaseBase.origin && url.pathname.startsWith(publicPrefix)) {
+      const encodedKey = url.pathname.slice(publicPrefix.length);
+      const decodedKey = encodedKey.split("/").map(segment => decodeURIComponent(segment)).join("/");
+      const deleteUrl = `${supabaseBase.origin}/storage/v1/object/${encodeURIComponent(bucket)}/${decodedKey.split("/").map(encodeURIComponent).join("/")}`;
+      const response = await fetch(deleteUrl, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${ENV.supabaseServiceRoleKey}`,
+          apikey: ENV.supabaseServiceRoleKey,
+        },
+      });
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Supabase Storage delete failed (${response.status}).`);
+      }
+      return "deleted";
+    }
+  }
+
+  if (imageUrl.startsWith("/uploads/")) {
+    const key = imageUrl.slice("/uploads/".length).split("/").map(decodeURIComponent).join("/");
+    if (key.split(/[\\/]/).some(segment => !segment || segment === "." || segment === "..")) {
+      throw new Error("Invalid uploaded image path.");
+    }
+    const publicDir = resolve(process.cwd(), "client", "public", "uploads");
+    const filePath = resolve(publicDir, key);
+    if (!filePath.startsWith(`${publicDir}${sep}`)) throw new Error("Invalid uploaded image path.");
+    await rm(filePath, { force: true });
+    return "deleted";
+  }
+
+  if (imageUrl.startsWith("/manus-storage/")) return "unsupported";
+  return "external";
 }

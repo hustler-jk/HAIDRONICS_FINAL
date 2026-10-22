@@ -10,6 +10,7 @@ import {
   Download,
   Edit2,
   Eye,
+  EyeOff,
   FileBarChart,
   FileText,
   Images,
@@ -204,6 +205,7 @@ function AdminWorkspace() {
     url: "",
     imageUrl: "",
   });
+  const [editingUpdateId, setEditingUpdateId] = useState<number | null>(null);
 
   const [restockDraft, setRestockDraft] = useState<Record<string, string>>({});
   const [inventoryValues, setInventoryValues] = useState<Record<string, { stock: string; threshold: string }>>({});
@@ -307,6 +309,13 @@ function AdminWorkspace() {
     },
     onError: (error) => toast.error(error.message),
   });
+  const deleteComboRequestMutation = trpc.admin.comboRequests.delete.useMutation({
+    onSuccess: async (result) => {
+      toast.success(result.approvedOrderId ? "Request deleted. Its created order remains in Orders." : "Kit request deleted.");
+      await Promise.all([utils.admin.comboRequests.list.invalidate(), utils.admin.audit.list.invalidate()]);
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const createStoryMutation = trpc.admin.customerStories.create.useMutation({
     onSuccess: async () => {
@@ -323,7 +332,17 @@ function AdminWorkspace() {
   const createUpdateMutation = trpc.admin.updates.create.useMutation({
     onSuccess: async () => {
       setNewUpdate({ kind: "announcement", title: "", body: "", url: "", imageUrl: "" });
+      setEditingUpdateId(null);
       toast.success("Store update published.");
+      await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const updateUpdateMutation = trpc.admin.updates.update.useMutation({
+    onSuccess: async (result) => {
+      setNewUpdate({ kind: "announcement", title: "", body: "", url: "", imageUrl: "" });
+      setEditingUpdateId(null);
+      toast.success(result.active ? "Published banner updated." : "Hidden banner updated. Restore it when you want it on the homepage.");
       await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
     },
     onError: error => toast.error(error.message),
@@ -331,6 +350,24 @@ function AdminWorkspace() {
   const hideUpdateMutation = trpc.admin.updates.hide.useMutation({
     onSuccess: async () => {
       toast.success("Store update hidden.");
+      await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const restoreUpdateMutation = trpc.admin.updates.restore.useMutation({
+    onSuccess: async () => {
+      toast.success("Banner restored to the homepage.");
+      await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const deleteUpdateMutation = trpc.admin.updates.delete.useMutation({
+    onSuccess: async (result) => {
+      if (result.imageCleanup === "deleted") toast.success("Banner and its unused uploaded image were deleted.");
+      else if (result.imageCleanup === "shared") toast.success("Banner deleted. Its image was kept because another product or banner uses it.");
+      else if (result.imageCleanup === "unsupported") toast.success("Banner deleted. Its Forge-hosted image needs manual cleanup in the storage provider.");
+      else if (result.imageCleanup === "failed") toast.error("Banner deleted, but its stored image could not be removed.");
+      else toast.success("Banner deleted.");
       await Promise.all([utils.admin.updates.list.invalidate(), utils.catalog.updates.invalidate()]);
     },
     onError: error => toast.error(error.message),
@@ -781,7 +818,7 @@ function AdminWorkspace() {
                 onDelete={(id) => hideComboMutation.mutate({ id })}
               />
             )}
-            {section === "comboRequests" && <ComboRequestsAdmin rows={(comboRequestsQuery.data || []) as any[]} onApprove={(id) => approveComboRequestMutation.mutate({ id })} busy={approveComboRequestMutation.isPending} />}
+            {section === "comboRequests" && <ComboRequestsAdmin rows={(comboRequestsQuery.data || []) as any[]} onApprove={(id) => approveComboRequestMutation.mutate({ id })} onDelete={(id) => deleteComboRequestMutation.mutate({ id })} busy={approveComboRequestMutation.isPending || deleteComboRequestMutation.isPending} />}
 
             {section === "customerStories" && (
               <CustomerStoriesAdmin
@@ -805,22 +842,60 @@ function AdminWorkspace() {
                 }>}
                 draft={newUpdate}
                 setDraft={setNewUpdate}
+                editingUpdateId={editingUpdateId}
+                onEdit={update => {
+                  setEditingUpdateId(update.id);
+                  setNewUpdate({
+                    kind: update.kind as "instagram" | "youtube" | "announcement",
+                    title: update.title,
+                    body: update.body || "",
+                    url: update.url || "",
+                    imageUrl: update.imageUrl || "",
+                  });
+                }}
+                onCancelEdit={() => {
+                  setEditingUpdateId(null);
+                  setNewUpdate({ kind: "announcement", title: "", body: "", url: "", imageUrl: "" });
+                }}
                 onAdd={() => {
                   if (!newUpdate.title.trim()) {
                     toast.error("Add a title for this update.");
                     return;
                   }
-                  createUpdateMutation.mutate({
+                  if (newUpdate.kind !== "announcement") {
+                    let postUrl: URL;
+                    try {
+                      postUrl = new URL(newUpdate.url.trim());
+                    } catch {
+                      toast.error(`Enter the full HTTPS ${newUpdate.kind === "instagram" ? "Instagram" : "YouTube"} post or channel URL.`);
+                      return;
+                    }
+                    const host = postUrl.hostname.toLowerCase().replace(/^www\./, "");
+                    const validHost = newUpdate.kind === "instagram"
+                      ? host === "instagram.com"
+                      : host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be";
+                    if (postUrl.protocol !== "https:" || !validHost) {
+                      toast.error(newUpdate.kind === "instagram"
+                        ? "Use an HTTPS Instagram post or profile URL."
+                        : "Use an HTTPS YouTube or youtu.be video/channel URL.");
+                      return;
+                    }
+                  }
+                  const fields = {
                     kind: newUpdate.kind,
                     title: newUpdate.title.trim(),
                     body: newUpdate.body.trim() || undefined,
                     url: newUpdate.url.trim() || undefined,
                     imageUrl: newUpdate.imageUrl.trim() || undefined,
-                  });
+                  };
+                  if (editingUpdateId) updateUpdateMutation.mutate({ id: editingUpdateId, ...fields });
+                  else createUpdateMutation.mutate(fields);
                 }}
                 onHide={id => hideUpdateMutation.mutate({ id })}
+                onRestore={id => restoreUpdateMutation.mutate({ id })}
+                onDelete={id => deleteUpdateMutation.mutate({ id })}
                 onUploadImage={photo => uploadMutation.mutateAsync(photo)}
-                saving={createUpdateMutation.isPending || uploadMutation.isPending}
+                saving={createUpdateMutation.isPending || updateUpdateMutation.isPending || hideUpdateMutation.isPending || restoreUpdateMutation.isPending || deleteUpdateMutation.isPending || uploadMutation.isPending}
               />
             )}
 
@@ -1348,6 +1423,17 @@ function ProductsAdmin({
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
 }) {
+  const [sortOrder, setSortOrder] = useState("name");
+  const sortedProducts = useMemo(() => [...products].sort((a, b) => {
+    switch (sortOrder) {
+      case "price-asc": return a.price - b.price || a.name.localeCompare(b.name);
+      case "price-desc": return b.price - a.price || a.name.localeCompare(b.name);
+      case "stock-asc": return (a.stock ?? 0) - (b.stock ?? 0) || a.name.localeCompare(b.name);
+      case "stock-desc": return (b.stock ?? 0) - (a.stock ?? 0) || a.name.localeCompare(b.name);
+      case "category": return (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name);
+      default: return a.name.localeCompare(b.name);
+    }
+  }), [products, sortOrder]);
   return (
     <div>
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -1366,7 +1452,8 @@ function ProductsAdmin({
         </button>
       </div>
 
-      <div className="mt-6 flex items-center gap-3 rounded-lg bg-white px-4 border border-black/10">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+      <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-white px-4 border border-black/10">
         <Search size={17} className="text-black/40" />
         <input
           value={search}
@@ -1374,6 +1461,13 @@ function ProductsAdmin({
           placeholder="Search products by name, SKU, or category..."
           className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-black/30"
         />
+      </div>
+      <label className="block sm:w-56">
+        <span className="sr-only">Sort products</span>
+        <select value={sortOrder} onChange={event => setSortOrder(event.target.value)} className="h-12 w-full rounded-lg border border-black/10 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+          <option value="name">Name (A–Z)</option><option value="category">Category</option><option value="price-asc">Price (low to high)</option><option value="price-desc">Price (high to low)</option><option value="stock-asc">Stock (low to high)</option><option value="stock-desc">Stock (high to low)</option>
+        </select>
+      </label>
       </div>
 
       <div className="mt-5 overflow-x-auto rounded-lg bg-white border border-black/10 shadow-sm">
@@ -1389,7 +1483,7 @@ function ProductsAdmin({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
+            {sortedProducts.map((product) => (
               <tr key={product.id} className="border-b border-black/[0.06] last:border-0 hover:bg-black/[0.01]">
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -1474,11 +1568,31 @@ function OrdersAdmin({
   busy: boolean;
 }) {
   const [filter, setFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const query = search.trim().toLocaleLowerCase();
 
   const filteredOrders = useMemo(() => {
-    if (filter === "ALL") return orders;
-    return orders.filter((o) => o.status === filter);
-  }, [orders, filter]);
+    return orders.filter((order) => {
+      const matchesStatus = filter === "ALL" || order.status === filter;
+      if (!matchesStatus) return false;
+      if (!query) return true;
+      const searchable = [
+        order.orderNumber, order.id, order.customerName, order.phone, order.address,
+        order.status, order.paymentStatus, order.invoiceId,
+        ...(order.items || []).flatMap((item: any) => [item.productName, item.sku]),
+      ];
+      return searchable.some((value) => String(value ?? "").toLocaleLowerCase().includes(query));
+    });
+  }, [orders, filter, query]);
+  const sortedOrders = useMemo(() => [...filteredOrders].sort((a, b) => {
+    switch (sortOrder) {
+      case "oldest": return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case "amount-asc": return Number(a.finalAmount ?? a.total ?? 0) - Number(b.finalAmount ?? b.total ?? 0);
+      case "amount-desc": return Number(b.finalAmount ?? b.total ?? 0) - Number(a.finalAmount ?? a.total ?? 0);
+      default: return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  }), [filteredOrders, sortOrder]);
 
   return (
     <div>
@@ -1512,9 +1626,29 @@ function OrdersAdmin({
         )}
       </div>
 
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-1 sm:flex-row sm:items-center">
+        <AdminSearchField
+          label="Search customer orders"
+          placeholder="Search order ID, customer, phone, SKU, or status…"
+          value={search}
+          onChange={setSearch}
+        />
+        <label className="block sm:w-52">
+          <span className="sr-only">Sort orders</span>
+          <select value={sortOrder} onChange={event => setSortOrder(event.target.value)} className="h-11 w-full rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+            <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount-desc">Amount (high to low)</option><option value="amount-asc">Amount (low to high)</option>
+          </select>
+        </label>
+        </div>
+        <p className="text-xs text-black/50" aria-live="polite" aria-atomic="true">
+          {filteredOrders.length} {filteredOrders.length === 1 ? "order" : "orders"}
+        </p>
+      </div>
+
       <div className="mt-6 grid gap-4">
         {filteredOrders.length ? (
-          filteredOrders.map((order) => (
+          sortedOrders.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
@@ -1831,15 +1965,76 @@ function InventoryAdmin({
   onSaveInventory: (product: Product, stock: number, threshold: number) => void;
   busy: boolean;
 }) {
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const filteredProducts = useMemo(() => {
+    if (!query) return products;
+    return products.filter((product) =>
+      [product.name, product.sku, product.category]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(query)),
+    );
+  }, [products, query]);
+  const filteredMovements = useMemo(() => {
+    if (!query) return movements;
+    return movements.filter(({ movement, productName }: any) =>
+      [productName, movement?.reason, movement?.note, movement?.productId]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(query)),
+    );
+  }, [movements, query]);
+  const [sortOrder, setSortOrder] = useState("name");
+  const sortedProducts = useMemo(() => [...filteredProducts].sort((a, b) => {
+    switch (sortOrder) {
+      case "stock-asc": return (a.stock ?? 0) - (b.stock ?? 0) || a.name.localeCompare(b.name);
+      case "stock-desc": return (b.stock ?? 0) - (a.stock ?? 0) || a.name.localeCompare(b.name);
+      case "threshold-desc": return (b.lowStockThreshold ?? 0) - (a.lowStockThreshold ?? 0) || a.name.localeCompare(b.name);
+      default: return a.name.localeCompare(b.name);
+    }
+  }), [filteredProducts, sortOrder]);
+
   return (
     <div>
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Stock Control / Ledger</p>
           <h2 className="mt-1 font-display text-3xl font-bold">Inventory & Movement Trail</h2>
         </div>
-        <p className="max-w-xs text-right text-xs leading-5 text-black/50">
+        <p className="max-w-xs text-xs leading-5 text-black/50 md:text-right">
           Payment confirmation automatically deducts units and prevents overselling. Restocks are logged with audit reasons.
+        </p>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center">
+        <label className="relative block w-full sm:max-w-md sm:flex-1">
+          <span className="sr-only">Search inventory by component, SKU, or category</span>
+          <Search aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search component, SKU, or category…"
+            className="h-11 w-full rounded-md border border-black/15 bg-white pl-10 pr-10 text-sm outline-none transition focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/30"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear inventory search"
+              className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-black/45 hover:bg-black/5 hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
+        </label>
+        <label className="block w-full sm:w-56">
+          <span className="sr-only">Sort inventory</span>
+          <select value={sortOrder} onChange={event => setSortOrder(event.target.value)} className="h-11 w-full rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+            <option value="name">Name (A–Z)</option><option value="stock-asc">Stock (low to high)</option><option value="stock-desc">Stock (high to low)</option><option value="threshold-desc">Threshold (high to low)</option>
+          </select>
+        </label>
+        </div>
+        <p className="text-xs text-black/50" aria-live="polite" aria-atomic="true">
+          {query ? `${filteredProducts.length} of ${products.length} components` : `${products.length} components`}
         </p>
       </div>
 
@@ -1855,7 +2050,7 @@ function InventoryAdmin({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
+            {sortedProducts.map((product) => (
               <tr key={product.id} className="border-b border-black/[0.06] last:border-0 hover:bg-black/[0.01]">
                 <td className="px-5 py-4 font-medium">{product.name}</td>
                 <td className="px-5 py-4 font-mono text-xs text-black/50">{product.sku}</td>
@@ -1874,6 +2069,7 @@ function InventoryAdmin({
                         setRestockDraft((cur) => ({ ...cur, [String(product.dbId)]: e.target.value }))
                       }
                       className="h-9 w-20 rounded border border-black/15 bg-[#f7f8f8] px-2 text-xs font-mono"
+                      aria-label={`Restock quantity for ${product.name}`}
                     />
                     <button
                       type="button"
@@ -1888,16 +2084,23 @@ function InventoryAdmin({
                 </td>
               </tr>
             ))}
+            {filteredProducts.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-10 text-center text-sm text-black/50">
+                  {products.length ? "No inventory items match your search." : "No inventory items yet."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="mt-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-orange-600 font-semibold">
-          Movement History (Last 300 Events)
+          Movement History {query ? `(${filteredMovements.length} matches)` : "(Last 300 Events)"}
         </p>
         <div className="mt-3 grid gap-2">
-          {movements.slice(0, 15).map((row: any) => (
+          {filteredMovements.slice(0, 15).map((row: any) => (
             <div
               key={row.movement.id}
               className="flex flex-wrap justify-between items-center gap-3 rounded-md bg-white border border-black/[0.06] px-4 py-3 text-sm"
@@ -1921,6 +2124,11 @@ function InventoryAdmin({
               </div>
             </div>
           ))}
+          {filteredMovements.length === 0 && (
+            <p className="rounded-md border border-dashed border-black/15 bg-white px-4 py-6 text-center text-sm text-black/45">
+              {movements.length ? "No inventory movements match your search." : "No inventory movements recorded yet."}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -2190,6 +2398,7 @@ function TransactionsAdmin({ rows }: { rows: any[] }) {
     <SimpleLedger
       title="Verified Transactions"
       eyebrow="Finance & Payments"
+      searchPlaceholder="Search order, transaction type, or payment status…"
       rows={rows.map((row) => ({
         id: row.transaction.id,
         primary: row.orderNumber || `Order #${row.transaction.orderId}`,
@@ -2226,21 +2435,36 @@ function SimpleLedger({
   eyebrow,
   rows,
   empty,
+  searchPlaceholder,
 }: {
   title: string;
   eyebrow: string;
   rows: Array<{ id: number; primary: string; secondary: string; amount: string; date: Date | string }>;
   empty: string;
+  searchPlaceholder?: string;
 }) {
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const filteredRows = useMemo(() => query
+    ? rows.filter((row) => [row.primary, row.secondary, row.amount, row.date]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(query)))
+    : rows, [rows, query]);
+
   return (
     <div>
       <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">{eyebrow}</p>
       <h2 className="mt-1 font-display text-3xl font-bold">
         {title} <span className="text-black/30">({rows.length})</span>
       </h2>
+      {searchPlaceholder && (
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchField label={`Search ${title.toLowerCase()}`} placeholder={searchPlaceholder} value={search} onChange={setSearch} />
+          <p className="text-xs text-black/50" aria-live="polite" aria-atomic="true">{filteredRows.length} {filteredRows.length === 1 ? "result" : "results"}</p>
+        </div>
+      )}
       <div className="mt-6 grid gap-2.5">
-        {rows.length ? (
-          rows.map((row) => (
+        {filteredRows.length ? (
+          filteredRows.map((row) => (
             <div
               key={row.id}
               className="flex flex-col justify-between gap-3 rounded-lg bg-white p-4 border border-black/[0.06] md:flex-row md:items-center shadow-sm"
@@ -2257,7 +2481,7 @@ function SimpleLedger({
           ))
         ) : (
           <div className="rounded-lg border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/50">
-            {empty}
+            {rows.length && query ? "No records match your search." : empty}
           </div>
         )}
       </div>
@@ -2265,8 +2489,11 @@ function SimpleLedger({
   );
 }
 
-function ComboRequestsAdmin({ rows, onApprove, busy }: { rows: Array<{ request: any; kit: string | null; kitSlug: string | null }>; onApprove: (id: number) => void; busy: boolean }) {
-  return <section><p className="font-mono text-[10px] uppercase tracking-[.15em] text-orange-600 font-semibold">Combo kits / availability queue</p><h2 className="mt-1 font-display text-3xl font-bold">Customer kit requests</h2><p className="mt-2 text-sm text-black/55">Approve a request to create a standard order. Then use Orders to mark it payment pending and continue through payment verification, stock deduction, and invoice processing.</p><div className="mt-6 grid gap-3">{rows.length ? rows.map(({ request, kit }) => <article key={request.id} className="rounded-lg border border-black/10 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-[9px] uppercase tracking-wider text-orange-600">Request #{request.id} / {request.status}</p><h3 className="mt-1 font-display text-xl font-bold">{kit || "Combo kit"}</h3><p className="mt-2 text-sm">{request.customerName} · {request.phone}</p><p className="mt-1 max-w-xl text-xs leading-5 text-black/55">{request.address}</p>{request.approvedOrderId && <p className="mt-2 font-mono text-xs text-emerald-700">Order ID: {request.approvedOrderId}</p>}</div>{request.status === "REQUESTED" && <button type="button" disabled={busy} onClick={() => onApprove(request.id)} className="rounded-md bg-orange-500 px-4 py-3 font-mono text-[9px] font-bold uppercase tracking-wider text-black disabled:opacity-50">Approve & create order</button>}</div></article>) : <p className="rounded-lg border border-dashed border-black/20 p-8 text-center text-sm text-black/45">No combo kit requests yet.</p>}</div></section>;
+function ComboRequestsAdmin({ rows, onApprove, onDelete, busy }: { rows: Array<{ request: any; kit: string | null; kitSlug: string | null }>; onApprove: (id: number) => void; onDelete: (id: number) => void; busy: boolean }) {
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const filtered = query ? rows.filter(({ request, kit }) => [request.id, request.status, request.customerName, request.phone, request.address, request.approvedOrderId, kit].some(value => String(value ?? "").toLocaleLowerCase().includes(query))) : rows;
+  return <section><p className="font-mono text-[10px] uppercase tracking-[.15em] text-orange-600 font-semibold">Combo kits / availability queue</p><h2 className="mt-1 font-display text-3xl font-bold">Customer kit requests</h2><p className="mt-2 text-sm text-black/55">Approve a request to create a standard order. Then use Orders to mark it payment pending and continue through payment verification, stock deduction, and invoice processing.</p><label className="relative mt-5 block max-w-xl"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search kit, customer, phone, status, or order ID" aria-label="Search kit requests" className="w-full rounded-md border border-black/15 bg-white py-3 pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-orange-500" /></label><div className="mt-4 grid gap-3">{filtered.length ? filtered.map(({ request, kit }) => <article key={request.id} className="rounded-lg border border-black/10 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="font-mono text-[9px] uppercase tracking-wider text-orange-600">Request #{request.id} / {request.status}</p><h3 className="mt-1 font-display text-xl font-bold">{kit || "Combo kit"}</h3><p className="mt-2 text-sm">{request.customerName} · {request.phone}</p><p className="mt-1 max-w-xl break-words text-xs leading-5 text-black/55">{request.address}</p>{request.approvedOrderId && <p className="mt-2 font-mono text-xs text-emerald-700">Order ID: {request.approvedOrderId} (order is retained if this request is deleted)</p>}</div><div className="flex shrink-0 flex-wrap items-center gap-2">{request.status === "REQUESTED" && <button type="button" disabled={busy} onClick={() => onApprove(request.id)} className="rounded-md bg-orange-500 px-4 py-3 font-mono text-[9px] font-bold uppercase tracking-wider text-black disabled:opacity-50">Approve & create order</button>}<button type="button" disabled={busy || request.status === "PROCESSING"} onClick={() => { if (window.confirm(`Delete kit request #${request.id}?${request.approvedOrderId ? " The created order will remain in Orders." : ""}`)) onDelete(request.id); }} aria-label={`Delete kit request ${request.id}`} className="inline-flex items-center gap-2 rounded-md border border-red-200 px-3 py-2.5 font-mono text-[9px] font-bold uppercase tracking-wider text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={14} />Delete</button></div></div></article>) : <p className="rounded-lg border border-dashed border-black/20 p-8 text-center text-sm text-black/45">{rows.length ? "No kit requests match your search." : "No combo kit requests yet."}</p>}</div></section>;
 }
 
 function Requests({
@@ -2277,6 +2504,7 @@ function Requests({
     products: Array<{ id: number; component: string; quantity: number; createdAt: Date }>;
   };
 }) {
+  const [search, setSearch] = useState("");
   const items = [
     ...(data?.projects || []).map((item) => ({
       type: "PROJECT SUPPORT",
@@ -2291,14 +2519,23 @@ function Requests({
       date: item.createdAt,
     })),
   ];
+  const query = search.trim().toLocaleLowerCase();
+  const filteredItems = query
+    ? items.filter((item) => [item.type, item.title, item.meta, item.date]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(query)))
+    : items;
 
   return (
     <div>
       <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-orange-600 font-semibold">Inbox / Forms</p>
       <h2 className="mt-1 font-display text-3xl font-bold">Customer Requests ({items.length})</h2>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <AdminSearchField label="Search customer requests" placeholder="Search request type, product, customer, or budget…" value={search} onChange={setSearch} />
+        <p className="text-xs text-black/50" aria-live="polite" aria-atomic="true">{filteredItems.length} {filteredItems.length === 1 ? "request" : "requests"}</p>
+      </div>
       <div className="mt-6 grid gap-3">
-        {items.length ? (
-          items.map((item, index) => (
+        {filteredItems.length ? (
+          filteredItems.map((item, index) => (
             <div key={index} className="flex flex-col justify-between gap-4 rounded-lg bg-white p-5 border border-black/[0.06] sm:flex-row sm:items-center shadow-sm">
               <div>
                 <span className="font-mono text-[9px] uppercase tracking-wider font-bold text-orange-600">{item.type}</span>
@@ -2310,11 +2547,38 @@ function Requests({
           ))
         ) : (
           <div className="rounded-lg border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/50">
-            No customer requests submitted yet.
+            {items.length ? "No customer requests match your search." : "No customer requests submitted yet."}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function AdminSearchField({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="relative block w-full sm:max-w-xl">
+      <span className="sr-only">{label}</span>
+      <Search aria-hidden="true" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
+      <input
+        type="search"
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-11 w-full rounded-md border border-black/15 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/30"
+      />
+    </label>
   );
 }
 
@@ -2333,8 +2597,13 @@ function StoreUpdatesAdmin({
   updates,
   draft,
   setDraft,
+  editingUpdateId,
+  onEdit,
+  onCancelEdit,
   onAdd,
   onHide,
+  onRestore,
+  onDelete,
   onUploadImage,
   saving,
 }: {
@@ -2347,12 +2616,18 @@ function StoreUpdatesAdmin({
     imageUrl: string;
   };
   setDraft: React.Dispatch<React.SetStateAction<typeof draft>>;
+  editingUpdateId: number | null;
+  onEdit: (update: StoreUpdateAdminRow) => void;
+  onCancelEdit: () => void;
   onAdd: () => void;
   onHide: (id: number) => void;
+  onRestore: (id: number) => void;
+  onDelete: (id: number) => void;
   onUploadImage: (photo: { filename: string; contentType: ProductPhotoContentType; base64: string }) => Promise<{ url: string }>;
   saving: boolean;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [failedImageIds, setFailedImageIds] = useState<number[]>([]);
 
   const uploadPostImage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2362,11 +2637,29 @@ function StoreUpdatesAdmin({
       toast.error("Choose a JPG, PNG, or WebP post image.");
       return;
     }
+    const contentType: ProductPhotoContentType = file.type;
     if (file.size > 5_000_000) {
       toast.error("Post images must be smaller than 5 MB.");
       return;
     }
-    const contentType = file.type;
+    const previewUrl = URL.createObjectURL(file);
+    const imageProbe = new Image();
+    imageProbe.onload = () => {
+      URL.revokeObjectURL(previewUrl);
+      if (imageProbe.naturalWidth < 1600 || imageProbe.naturalHeight < 700) {
+        toast.error(`Banner image is ${imageProbe.naturalWidth}×${imageProbe.naturalHeight}px. Use at least 1600×700px; 1920×840px is ideal for a sharp banner.`);
+        return;
+      }
+      uploadBannerFile(file, contentType);
+    };
+    imageProbe.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      toast.error("Could not read the selected banner image.");
+    };
+    imageProbe.src = previewUrl;
+  };
+
+  const uploadBannerFile = (file: File, contentType: ProductPhotoContentType) => {
     setUploadingImage(true);
     const reader = new FileReader();
     reader.onerror = () => {
@@ -2407,15 +2700,19 @@ function StoreUpdatesAdmin({
       <div className="mt-5 grid gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-orange-950 sm:grid-cols-3">
         <p><b>1. Create a slide</b><br />Choose an announcement for a custom homepage banner, or Instagram / YouTube for a social post.</p>
         <p><b>2. Add banner copy</b><br />Enter the title and short text customers will see over the image.</p>
-        <p><b>3. Add your image</b><br />Upload a wide JPG, PNG, or WebP banner. Aim for about 1920 × 900 and keep it compressed for fast mobile loading.</p>
+        <p><b>3. Add your image</b><br />Upload a wide JPG, PNG, or WebP banner. Use at least 1600 × 700 pixels; 1920 × 840 is ideal.</p>
       </div>
       <p className="mt-2 text-xs leading-5 text-black/45">
-        Upload one image per slide, then publish more slides to build the carousel. The homepage pauses while a visitor hovers or focuses the controls. Social posts still link to the original post; they are not imported automatically.
+        Instagram and YouTube links open the original post or video; they are not embedded or imported. Add separate banner artwork with the image upload or image URL field. The homepage pauses while a visitor hovers or focuses the controls.
       </p>
+      <p className="mt-2 text-xs leading-5 text-black/45">Every slide fills the same frame (4:3 on phones, 16:7 on larger screens). Images crop to fill, so keep the main subject near the center. Uploads below 1600 × 700 pixels are rejected; 1920 × 840 pixels is ideal for a sharp banner.</p>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm md:p-6">
-          <h3 className="font-display text-xl font-bold">Create a banner slide</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-xl font-bold">{editingUpdateId ? "Edit banner slide" : "Create a banner slide"}</h3>
+            {editingUpdateId && <button type="button" onClick={onCancelEdit} className="font-mono text-[9px] font-bold uppercase tracking-wider text-black/50 hover:text-black">Cancel edit</button>}
+          </div>
           <div className="mt-5 grid gap-4">
             <label>
               <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/50">Update type</span>
@@ -2451,31 +2748,51 @@ function StoreUpdatesAdmin({
             </label>
             {draft.imageUrl && (
               <div className="overflow-hidden rounded-lg border border-black/10 bg-[#111619]">
-                <img src={draft.imageUrl} alt="Banner preview" className="aspect-[16/9] max-h-56 w-full object-cover" />
+                <img src={draft.imageUrl} alt="Banner preview" className="aspect-[4/3] w-full rounded object-cover sm:aspect-[16/7]" />
                 <p className="px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-white/55">Homepage banner preview</p>
               </div>
             )}
           </div>
           <button type="button" disabled={saving || !draft.title.trim()} onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-md bg-orange-500 px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black hover:bg-orange-400 disabled:opacity-50">
-            {saving && <Loader2 size={13} className="animate-spin" />} Publish banner slide
+            {saving && <Loader2 size={13} className="animate-spin" />} {editingUpdateId ? "Save banner changes" : "Publish banner slide"}
           </button>
         </div>
 
         <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm md:p-6">
           <h3 className="font-display text-xl font-bold">Published & hidden updates ({updates.length})</h3>
+          <p className="mt-1 text-xs leading-5 text-black/50">Hidden banners stay here and are removed from the homepage. Restore one to publish it again.</p>
           <div className="mt-4 grid gap-3">
             {updates.length ? updates.map(update => (
               <article key={update.id} className="flex items-start gap-3 rounded-lg border border-black/10 p-4">
-                {update.imageUrl ? <img src={update.imageUrl} alt="" className="size-14 shrink-0 rounded object-cover" /> : <span className="grid size-14 shrink-0 place-items-center rounded bg-orange-50 text-orange-600"><Megaphone size={20} /></span>}
+                {update.imageUrl && !failedImageIds.includes(update.id)
+                  ? <img src={update.imageUrl} alt="" onError={() => setFailedImageIds(current => current.includes(update.id) ? current : [...current, update.id])} className="size-14 shrink-0 rounded object-cover" />
+                  : <span className="grid size-14 shrink-0 place-items-center rounded bg-orange-50 text-orange-600"><Megaphone size={20} /></span>}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="font-semibold">{update.title}</h4>
                     <span className={`rounded px-2 py-0.5 font-mono text-[8px] uppercase ${update.active ? "bg-emerald-50 text-emerald-700" : "bg-black/5 text-black/45"}`}>{update.active ? "Published" : "Hidden"}</span>
+                    {!update.imageUrl && <span className="rounded bg-amber-50 px-2 py-0.5 font-mono text-[8px] uppercase text-amber-700">No banner image</span>}
+                    {update.imageUrl && failedImageIds.includes(update.id) && <span className="rounded bg-red-50 px-2 py-0.5 font-mono text-[8px] uppercase text-red-700">Image unavailable</span>}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-black/50">{update.body || update.url || update.kind}</p>
                   <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-black/35">{update.kind}</p>
                 </div>
-                {update.active === 1 && <button type="button" onClick={() => onHide(update.id)} aria-label={`Hide ${update.title}`} className="rounded p-2 text-black/40 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>}
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" onClick={() => onEdit(update)} aria-label={`Edit ${update.title}`} title="Edit banner" className="rounded p-2 text-black/45 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-50" disabled={saving}><Edit2 size={15} /></button>
+                  {update.active === 1
+                    ? <button type="button" onClick={() => onHide(update.id)} aria-label={`Hide ${update.title}`} title="Hide from homepage" className="rounded p-2 text-black/40 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50" disabled={saving}><EyeOff size={15} /></button>
+                    : <button type="button" onClick={() => onRestore(update.id)} aria-label={`Restore ${update.title} to homepage`} title="Restore to homepage" className="rounded p-2 text-black/45 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50" disabled={saving}><Eye size={15} /></button>}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Permanently delete “${update.title}”? Any uploaded image will only be removed if no other product or banner uses it.`)) onDelete(update.id);
+                    }}
+                    aria-label={`Permanently delete ${update.title}`}
+                    title="Permanently delete banner"
+                    className="rounded p-2 text-black/40 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    disabled={saving}
+                  ><Trash2 size={15} /></button>
+                </div>
               </article>
             )) : <p className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-black/45">No updates yet. Publish a post or announcement to start.</p>}
           </div>
@@ -2613,8 +2930,8 @@ function AddProductModal({
         toast.error(`${file.name}: use a JPG, PNG, or WebP image.`);
         return false;
       }
-      if (file.size > 5_000_000) {
-        toast.error(`${file.name}: photos must be smaller than 5 MB.`);
+      if (file.size > 4 * 1024 * 1024) {
+        toast.error(`${file.name}: product photos must be 4 MB or smaller.`);
         return false;
       }
       return true;
@@ -2765,7 +3082,7 @@ function AddProductModal({
               disabled={product.images.length + product.photos.length >= 4}
               className="block w-full text-xs text-black/60 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-3 file:py-1.5 file:font-mono file:text-[10px] file:font-bold file:text-white hover:file:bg-orange-600"
             />
-            <p className="mt-2 font-mono text-[9px] text-black/45">Add up to four JPG, PNG, or WebP images (5 MB each). The first photo is the catalog cover.</p>
+            <p className="mt-2 font-mono text-[9px] text-black/45">Add up to four JPG, PNG, or WebP images (4 MB maximum each). The first photo is the catalog cover.</p>
             {(product.images.length > 0 || product.photos.length > 0) && (
               <div className="mt-3 grid grid-cols-4 gap-2">
                 {product.images.map((url, index) => (

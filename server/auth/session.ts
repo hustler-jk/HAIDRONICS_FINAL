@@ -105,10 +105,9 @@ export async function clearSessionCookies(req: Request, res: Response) {
   if (rawRefreshToken) {
     await revokeAuthSession(refreshTokenHash(rawRefreshToken));
   }
-  res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(req), maxAge: -1 });
+  res.clearCookie(COOKIE_NAME, getSessionCookieOptions(req));
   res.clearCookie(REFRESH_COOKIE_NAME, {
     ...getSessionCookieOptions(req),
     path: "/api",
-    maxAge: -1,
   });
 }

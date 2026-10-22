@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { clearSessionCookies, issueSessionCookies } from "./auth/session";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { approveComboKitRequest, createCatalogProduct, createComboKit, createComboKitRequest, createCustomerStory, createProductCategory, createServerPricedOrder, createStoreUpdate, deleteCatalogProduct, deleteProductCategory, emailVerifiedOrderInvoice, generateOrderInvoice, getCatalogProduct, getCommerceMetrics, getDb, getOrderForUser, getSiteSettings, getUserByEmail, hideComboKit, hideCustomerStory, hideStoreUpdate, listAdminCatalogProducts, listAdminOrders, listAnalyticsEvents, listAuditLogs, listCatalogProducts, listComboKitRequests, listComboKits, listCustomerStories, listInventoryMovements, listOrdersForUser, listProductCategories, listProductRequests, listProjectRequests, listRequestsForUser, listStoreUpdates, listTransactions, overrideOrderAmount, recordAnalyticsEvent, rejectOrderPayment, restockProduct, saveEmailVerificationToken, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, toPublicCatalogProduct, transitionOrderStatus, updateCatalogProduct, updateUserProfile, upsertUser, verifyEmailToken, verifyOrderPayment } from "./db";
-import { storagePut } from "./storage";
+import { approveComboKitRequest, createCatalogProduct, createComboKit, createComboKitRequest, createCustomerStory, createProductCategory, createServerPricedOrder, createStoreUpdate, deleteCatalogProduct, deleteComboKitRequest, deleteProductCategory, deleteStoreUpdate, emailVerifiedOrderInvoice, generateOrderInvoice, getCatalogProduct, getCommerceMetrics, getDb, getOrderForUser, getSiteSettings, getUserByEmail, hideComboKit, hideCustomerStory, hideStoreUpdate, listAdminCatalogProducts, listAdminOrders, listAnalyticsEvents, listAuditLogs, listCatalogProducts, listComboKitRequests, listComboKits, listCustomerStories, listInventoryMovements, listOrdersForUser, listProductCategories, listProductRequests, listProjectRequests, listRequestsForUser, listStoreUpdates, listTransactions, overrideOrderAmount, recordAnalyticsEvent, rejectOrderPayment, restoreStoreUpdate, restockProduct, saveEmailVerificationToken, saveProductRequest, saveProjectRequest, saveSiteSettings, searchCatalogProducts, subscribeNewsletter, toPublicCatalogProduct, transitionOrderStatus, updateCatalogProduct, updateStoreUpdate, updateUserProfile, upsertUser, verifyEmailToken, verifyOrderPayment } from "./db";
+import { storageDeletePublicImage, storagePut } from "./storage";
 import { hashPassword, verifyPassword } from "./auth/password";
 import { createHash, randomBytes } from "node:crypto";
 import { isEmailVerificationConfigured, sendEmailVerification } from "./auth/email-verification";
@@ -45,17 +45,24 @@ export const appRouter = router({
         const existing = await getUserByEmail(email);
         if (existing) throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists." });
         const openId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        await upsertUser({
-          openId,
-          name: input.name.trim(),
-          email,
-          password: await hashPassword(input.password),
-          phone: input.phone || null,
-          address: input.address || null,
-          loginMethod: "password",
-          role: "user",
-          lastSignedIn: new Date(),
-        });
+        try {
+          await upsertUser({
+            openId,
+            name: input.name.trim(),
+            email,
+            password: await hashPassword(input.password),
+            phone: input.phone || null,
+            address: input.address || null,
+            loginMethod: "password",
+            role: "user",
+            lastSignedIn: new Date(),
+          });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists." });
+          }
+          throw error;
+        }
         const registeredUser = await getUserByEmail(email);
         if (!registeredUser) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not load the new account." });
         const token = randomBytes(32).toString("base64url");
@@ -165,8 +172,8 @@ export const appRouter = router({
         const safeFilename = input.filename.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 120);
         const encoded = input.base64.replace(/^data:[^;]+;base64,/, "");
         const data = Buffer.from(encoded, "base64");
-        if (!data.length || data.length > 5_000_000) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Each product photo must be smaller than 5 MB." });
+        if (!data.length || data.length > 4 * 1024 * 1024) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Each product photo must be 4 MB or smaller." });
         }
         return storagePut(`haidronics-products/${Date.now()}-${crypto.randomUUID()}-${safeFilename}`, data, input.contentType);
       }),
@@ -197,6 +204,7 @@ export const appRouter = router({
     comboRequests: router({
       list: adminProcedure.query(() => listComboKitRequests()),
       approve: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => approveComboKitRequest(input.id, ctx.user.id)),
+      delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => deleteComboKitRequest(input.id, ctx.user.id)),
     }),
     customerStories: router({
       list: adminProcedure.query(() => listCustomerStories()),
@@ -205,6 +213,21 @@ export const appRouter = router({
     }),
     updates: router({
       list: adminProcedure.query(() => listStoreUpdates(false)),
+      update: adminProcedure.input(z.object({
+        id: z.number().int().positive(),
+        kind: z.enum(["instagram", "youtube", "announcement"]),
+        title: z.string().trim().min(1).max(160),
+        body: z.string().trim().max(1000).optional(),
+        url: z.string().url().max(1000).refine(value => value.startsWith("https://"), "Links must use HTTPS.").optional(),
+        imageUrl: z.string().max(1000).refine(value => value.startsWith("https://") || value.startsWith("/uploads/") || value.startsWith("/manus-storage/"), "Image links must use HTTPS or be an uploaded site image.").optional(),
+      }).superRefine((input, ctx) => {
+        if (input.kind !== "announcement" && !input.url) {
+          ctx.addIssue({ code: "custom", path: ["url"], message: "A social post URL is required." });
+        }
+      })).mutation(({ input, ctx }) => {
+        const { id, ...fields } = input;
+        return updateStoreUpdate(id, fields, ctx.user.id);
+      }),
       create: adminProcedure.input(z.object({
         kind: z.enum(["instagram", "youtube", "announcement"]),
         title: z.string().trim().min(1).max(160),
@@ -217,6 +240,18 @@ export const appRouter = router({
         }
       })).mutation(({ input, ctx }) => createStoreUpdate({ ...input, active: 1 }, ctx.user.id)),
       hide: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => hideStoreUpdate(input.id, ctx.user.id)),
+      restore: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => restoreStoreUpdate(input.id, ctx.user.id)),
+      delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input, ctx }) => {
+        const result = await deleteStoreUpdate(input.id, ctx.user.id);
+        if (!result.imageUrl) return { success: true, imageCleanup: "none" as const };
+        if (result.imageUsedElsewhere) return { success: true, imageCleanup: "shared" as const };
+        try {
+          return { success: true, imageCleanup: await storageDeletePublicImage(result.imageUrl) };
+        } catch (error) {
+          console.error("[Store updates] Banner was deleted but its image cleanup failed:", error);
+          return { success: true, imageCleanup: "failed" as const };
+        }
+      }),
     }),
     requests: router({
       list: adminProcedure.query(async () => ({ projects: await listProjectRequests(), products: await listProductRequests() })),
@@ -255,5 +290,14 @@ export const appRouter = router({
     }),
   }),
 });
+
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+    if ("code" in current && (current as { code?: unknown }).code === "23505") return true;
+    current = "cause" in current ? (current as { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
 
 export type AppRouter = typeof appRouter;

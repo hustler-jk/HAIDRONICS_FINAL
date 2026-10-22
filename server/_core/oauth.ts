@@ -42,7 +42,7 @@ function googleCookieOptions(req: Request) {
 }
 
 function clearGoogleFlowCookies(res: Response, req: Request) {
-  const options = { ...getSessionCookieOptions(req), maxAge: 0 };
+  const options = getSessionCookieOptions(req);
   for (const name of [GOOGLE_STATE_COOKIE, GOOGLE_NONCE_COOKIE, GOOGLE_VERIFIER_COOKIE, GOOGLE_RETURN_COOKIE]) {
     res.clearCookie(name, options);
   }
@@ -72,7 +72,7 @@ export function registerOAuthRoutes(app: Express) {
     if (isSafeReturnPath(returnTo)) {
       res.cookie(GOOGLE_RETURN_COOKIE, returnTo, { ...cookieOptions, httpOnly: true });
     } else {
-      res.clearCookie(GOOGLE_RETURN_COOKIE, { ...getSessionCookieOptions(req), maxAge: 0 });
+      res.clearCookie(GOOGLE_RETURN_COOKIE, getSessionCookieOptions(req));
     }
 
     const authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

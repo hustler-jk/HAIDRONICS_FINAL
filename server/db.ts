@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, ilike, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, lt, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { billingCatalog } from "@shared/billingCatalog";
@@ -991,6 +991,18 @@ export async function approveComboKitRequest(id: number, adminUserId: number) {
   }
 }
 
+export async function deleteComboKitRequest(id: number, adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.transaction(async (tx) => {
+    const [request] = await tx.select().from(comboKitRequests).where(eq(comboKitRequests.id, id)).limit(1);
+    if (!request) throw new Error("Combo kit request not found.");
+    if (request.status === "PROCESSING") throw new Error("This request is currently being approved. Try again shortly.");
+    await tx.insert(auditLogs).values({ adminUserId, action: "COMBO_REQUEST_DELETED", entityType: "combo_request", entityId: id, details: JSON.stringify({ status: request.status, approvedOrderId: request.approvedOrderId }) });
+    await tx.delete(comboKitRequests).where(eq(comboKitRequests.id, id));
+    return { success: true, approvedOrderId: request.approvedOrderId };
+  });
+}
+
 export async function listCustomerStories() {
   const db = await getDb(); if (!db) return [];
   return db.select().from(customerStories).where(eq(customerStories.hidden, 0)).orderBy(desc(customerStories.createdAt));
@@ -1027,6 +1039,24 @@ export async function createStoreUpdate(input: InsertStoreUpdate, adminUserId: n
   });
 }
 
+export async function updateStoreUpdate(id: number, input: Pick<InsertStoreUpdate, "kind" | "title" | "body" | "url" | "imageUrl">, adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(storeUpdates).set(input)
+      .where(eq(storeUpdates.id, id))
+      .returning({ id: storeUpdates.id, title: storeUpdates.title, active: storeUpdates.active });
+    if (!updated) throw new Error("Banner update not found");
+    await tx.insert(auditLogs).values({
+      adminUserId,
+      action: "STORE_UPDATE_EDITED",
+      entityType: "store_update",
+      entityId: updated.id,
+      details: JSON.stringify({ title: updated.title, active: updated.active }),
+    });
+    return { success: true, id: updated.id, active: updated.active };
+  });
+}
+
 export async function hideStoreUpdate(id: number, adminUserId: number) {
   const db = await getDb(); if (!db) throw new Error("Database unavailable");
   return db.transaction(async (tx) => {
@@ -1042,5 +1072,53 @@ export async function hideStoreUpdate(id: number, adminUserId: number) {
       details: JSON.stringify({ title: updated.title }),
     });
     return { success: true };
+  });
+}
+
+export async function restoreStoreUpdate(id: number, adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(storeUpdates).set({ active: 1 })
+      .where(and(eq(storeUpdates.id, id), eq(storeUpdates.active, 0)))
+      .returning({ id: storeUpdates.id, title: storeUpdates.title });
+    if (!updated) throw new Error("Hidden update not found or already published");
+    await tx.insert(auditLogs).values({
+      adminUserId,
+      action: "STORE_UPDATE_RESTORED",
+      entityType: "store_update",
+      entityId: updated.id,
+      details: JSON.stringify({ title: updated.title }),
+    });
+    return { success: true };
+  });
+}
+
+export async function deleteStoreUpdate(id: number, adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("Database unavailable");
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select({ id: storeUpdates.id, title: storeUpdates.title, imageUrl: storeUpdates.imageUrl })
+      .from(storeUpdates).where(eq(storeUpdates.id, id)).limit(1);
+    if (!existing) throw new Error("Banner update not found");
+
+    let imageUsedElsewhere = false;
+    if (existing.imageUrl) {
+      const [otherUpdate] = await tx.select({ id: storeUpdates.id }).from(storeUpdates)
+        .where(and(eq(storeUpdates.imageUrl, existing.imageUrl), ne(storeUpdates.id, id))).limit(1);
+      const productImages = await tx.select({ imageUrl: products.imageUrl, images: products.images }).from(products);
+      const storyImages = await tx.select({ imageUrl: customerStories.imageUrl }).from(customerStories);
+      imageUsedElsewhere = Boolean(otherUpdate)
+        || productImages.some((product) => product.imageUrl === existing.imageUrl || Boolean(product.images?.includes(existing.imageUrl!)))
+        || storyImages.some((story) => story.imageUrl === existing.imageUrl);
+    }
+
+    await tx.delete(storeUpdates).where(eq(storeUpdates.id, id));
+    await tx.insert(auditLogs).values({
+      adminUserId,
+      action: "STORE_UPDATE_DELETED",
+      entityType: "store_update",
+      entityId: id,
+      details: JSON.stringify({ title: existing.title, imageUsedElsewhere }),
+    });
+    return { success: true, imageUrl: existing.imageUrl, imageUsedElsewhere };
   });
 }

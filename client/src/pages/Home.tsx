@@ -560,19 +560,36 @@ function HeroBannerCarousel({ slides }: { slides: BannerSlide[] }) {
             const href = external ? card.url : "/products";
             return (
               <div key={card.id} role="group" aria-roledescription="slide" aria-label={`${index + 1} of ${slides.length}`} className="min-w-full shrink-0">
-              <div className={`hero-banner-slide group/banner relative min-h-[240px] w-full overflow-hidden bg-[#080a0c] sm:min-h-0 sm:aspect-[16/7] lg:aspect-[16/7] ${index === activeIndex ? "is-active" : ""} ${card.artwork ? "hero-banner-artwork" : ""}`}>
-                  {card.imageUrl ? (
-                    <img src={card.imageUrl} alt="" loading={index === activeIndex ? "eager" : "lazy"} fetchPriority={index === activeIndex ? "high" : "auto"} className={`hero-banner-image absolute inset-0 size-full ${card.artwork ? "object-contain" : "object-cover"}`} />
-                  ) : (
-                    <div className="hero-banner-fallback absolute inset-0">
-                      <span className="hero-banner-fallback-grid" />
-                      <span className="hero-banner-orbit hero-banner-orbit-one" />
-                      <span className="hero-banner-orbit hero-banner-orbit-two" />
-                      <span className="hero-banner-fallback-mark">H<span>.</span></span>
-                    </div>
+              <div className={`hero-banner-slide group/banner relative min-h-0 w-full overflow-hidden bg-[#080a0c] ${index === activeIndex ? "is-active" : ""} ${card.artwork ? "hero-banner-artwork" : ""}`}>
+                  <div className={`hero-banner-fallback absolute inset-0 ${card.imageUrl ? "hidden" : ""}`}>
+                    <span className="hero-banner-fallback-grid" />
+                    <span className="hero-banner-orbit hero-banner-orbit-one" />
+                    <span className="hero-banner-orbit hero-banner-orbit-two" />
+                    <span className="hero-banner-fallback-mark">H<span>.</span></span>
+                  </div>
+                  {card.imageUrl && (
+                    <img
+                      src={card.imageUrl}
+                      alt=""
+                      aria-hidden="true"
+                      loading={index === activeIndex ? "eager" : "lazy"}
+                      className="hero-banner-backdrop absolute inset-0 size-full object-cover"
+                    />
+                  )}
+                  {card.imageUrl && (
+                    <img
+                      src={card.imageUrl}
+                      alt=""
+                      loading={index === activeIndex ? "eager" : "lazy"}
+                      fetchPriority={index === activeIndex ? "high" : "auto"}
+                      onError={(event) => {
+                        event.currentTarget.classList.add("hidden");
+                        event.currentTarget.parentElement?.querySelector(".hero-banner-fallback")?.classList.remove("hidden");
+                      }}
+                      className="hero-banner-image absolute inset-0 size-full object-contain"
+                    />
                   )}
                   {!card.artwork && <div className="hero-banner-shade absolute inset-0" />}
-                  {!card.artwork && <div className="hero-banner-grain absolute inset-0" aria-hidden="true" />}
                   {!card.artwork && <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-5 sm:px-9 sm:py-8 lg:px-14">
                     <Link href="/" className="inline-flex items-center gap-3 text-white/90">
                       <span className="grid size-9 place-items-center rounded-sm border border-orange-300/40 bg-black/20 font-display text-lg font-bold text-orange-300">H</span>
@@ -582,7 +599,7 @@ function HeroBannerCarousel({ slides }: { slides: BannerSlide[] }) {
                       <span className="size-1.5 animate-pulse rounded-full bg-orange-400" /> FEATURED / {String(index + 1).padStart(2, "0")}
                     </span>
                   </div>}
-                  {!card.artwork && <div key={`${card.id}-${index === activeIndex ? activeIndex : "idle"}`} className={`hero-banner-copy absolute inset-x-0 bottom-0 z-10 px-6 pb-24 pt-28 sm:px-10 sm:pb-28 lg:px-16 lg:pb-32 ${index === activeIndex ? "is-active" : ""}`}>
+                  {!card.artwork && <div key={`${card.id}-${index === activeIndex ? activeIndex : "idle"}`} className={`hero-banner-copy absolute inset-x-0 bottom-0 z-10 pl-20 pr-6 pb-24 pt-28 sm:pl-24 sm:pr-10 sm:pb-28 lg:pl-28 lg:pr-16 lg:pb-32 ${index === activeIndex ? "is-active" : ""}`}>
                     <div className="max-w-3xl">
                       <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-orange-300/30 bg-black/30 px-3.5 py-2 font-mono text-[8px] uppercase tracking-[0.15em] text-orange-100 backdrop-blur sm:text-[9px]">
                         <span className="size-1.5 shrink-0 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,.9)]" />

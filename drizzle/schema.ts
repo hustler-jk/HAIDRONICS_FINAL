@@ -1,4 +1,5 @@
-import { index, integer, numeric, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, numeric, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const timestampColumn = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const updatedTimestampColumn = (name: string) => timestampColumn(name).defaultNow().notNull().$onUpdate(() => new Date());
@@ -18,7 +19,7 @@ export const users = pgTable("users", {
   updatedAt: updatedTimestampColumn("updatedAt"),
   lastSignedIn: timestampColumn("lastSignedIn").defaultNow().notNull(),
   emailVerifiedAt: timestampColumn("emailVerifiedAt"),
-});
+}, (table) => [uniqueIndex("users_email_lower_unique").on(sql`lower(${table.email})`).where(sql`${table.email} is not null`)]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
